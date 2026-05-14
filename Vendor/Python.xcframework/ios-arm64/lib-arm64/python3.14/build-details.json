@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "base_prefix": "/Users/runner/work/Python-Apple-support/Python-Apple-support/install/iOS/iphoneos.arm64/python-3.14.2",
+  "base_interpreter": "/Users/runner/work/Python-Apple-support/Python-Apple-support/install/iOS/iphoneos.arm64/python-3.14.2/bin/python3.14",
+  "platform": "ios-13.0-arm64-iphoneos",
+  "language": {
+    "version": "3.14",
+    "version_info": {
+      "major": 3,
+      "minor": 14,
+      "micro": 2,
+      "releaselevel": "final",
+      "serial": 0
+    }
+  },
+  "implementation": {
+    "name": "cpython",
+    "cache_tag": "cpython-314",
+    "version": {
+      "major": 3,
+      "minor": 14,
+      "micro": 2,
+      "releaselevel": "final",
+      "serial": 0
+    },
+    "hexversion": 51249904,
+    "_multiarch": "arm64-iphoneos",
+    "supports_isolated_interpreters": true
+  },
+  "abi": {
+    "flags": [],
+    "extension_suffix": ".cpython-314-iphoneos.so",
+    "stable_abi_suffix": ".abi3.so"
+  },
+  "suffixes": {
+    "source": [
+      ".py"
+    ],
+    "bytecode": [
+      ".pyc"
+    ],
+    "extensions": [
+      ".cpython-314-darwin.so",
+      ".abi3.so",
+      ".so"
+    ]
+  },
+  "libpython": {
+    "dynamic": "/Users/runner/work/Python-Apple-support/Python-Apple-support/install/iOS/iphoneos.arm64/python-3.14.2/lib/Python.framework/Python",
+    "link_extensions": false,
+    "static": "/Users/runner/work/Python-Apple-support/Python-Apple-support/install/iOS/iphoneos.arm64/python-3.14.2/lib/libpython3.14.a"
+  },
+  "c_api": {
+    "headers": "/Users/runner/work/Python-Apple-support/Python-Apple-support/install/iOS/iphoneos.arm64/python-3.14.2/include/python3.14",
+    "pkgconfig_path": "/Users/runner/work/Python-Apple-support/Python-Apple-support/install/iOS/iphoneos.arm64/python-3.14.2/lib/pkgconfig"
+  }
+}

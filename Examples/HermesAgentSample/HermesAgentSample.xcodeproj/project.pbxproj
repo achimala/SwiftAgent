@@ -1,0 +1,359 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		88B1F5EB1951FF117B007686 /* HermesAgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4BB96E7A52833DF97F37AA5E /* HermesAgentKit */; };
+		B85D7B0E2450F1BDF3FA8EC8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */; };
+		E0877EEBB28FA5FFB23EC500 /* HermesAgentSampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		3113797EFC3A21F2B1AAAF05 /* AgentKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentKit; path = ../..; sourceTree = SOURCE_ROOT; };
+		544419CD6953902644C5D8B6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesAgentSampleApp.swift; sourceTree = "<group>"; };
+		93A8FEFCE0E20CC1277EAC99 /* HermesAgentSample.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HermesAgentSample.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		7473B4323C46083FED003FCA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				88B1F5EB1951FF117B007686 /* HermesAgentKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		03A51773980194C29C553DC7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				93A8FEFCE0E20CC1277EAC99 /* HermesAgentSample.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		8452D9C7C48291C894DCD08E /* HermesAgentSample */ = {
+			isa = PBXGroup;
+			children = (
+				19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */,
+				6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */,
+				544419CD6953902644C5D8B6 /* Info.plist */,
+			);
+			path = HermesAgentSample;
+			sourceTree = "<group>";
+		};
+		AED6CBA19B001B636BD5C31A = {
+			isa = PBXGroup;
+			children = (
+				8452D9C7C48291C894DCD08E /* HermesAgentSample */,
+				B07D4CA284835EFEDC76766A /* Packages */,
+				03A51773980194C29C553DC7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B07D4CA284835EFEDC76766A /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				3113797EFC3A21F2B1AAAF05 /* AgentKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		15B2BA45B3025A083C7E515F /* HermesAgentSample */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 475135F7DA6FB5C5C606D782 /* Build configuration list for PBXNativeTarget "HermesAgentSample" */;
+			buildPhases = (
+				637B5C9E54D1B7257526790D /* Sources */,
+				E49C65EDAE6F527258D490B8 /* Process Python libraries */,
+				7473B4323C46083FED003FCA /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HermesAgentSample;
+			packageProductDependencies = (
+				4BB96E7A52833DF97F37AA5E /* HermesAgentKit */,
+			);
+			productName = HermesAgentSample;
+			productReference = 93A8FEFCE0E20CC1277EAC99 /* HermesAgentSample.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		33CE063CD8AF3A8BAE8EA432 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					15B2BA45B3025A083C7E515F = {
+						DevelopmentTeam = "";
+					};
+				};
+			};
+			buildConfigurationList = B15A9437FD8EC1EF235BC895 /* Build configuration list for PBXProject "HermesAgentSample" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = AED6CBA19B001B636BD5C31A;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				280DA97F67D82E1DEBF4515F /* XCLocalSwiftPackageReference "../.." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 03A51773980194C29C553DC7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				15B2BA45B3025A083C7E515F /* HermesAgentSample */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		E49C65EDAE6F527258D490B8 /* Process Python libraries */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Process Python libraries";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\nrm -rf \"$CODESIGNING_FOLDER_PATH/PythonApp\"\nmkdir -p \"$CODESIGNING_FOLDER_PATH/PythonApp/site-packages\"\nrsync -a --delete \\\n  --exclude \"/site-packages/\" \\\n  --exclude \"/site-packages-iphoneos/\" \\\n  --exclude \"/site-packages-iphonesimulator/\" \\\n  \"$PROJECT_DIR/HermesAgentSample/PythonApp/\" \\\n  \"$CODESIGNING_FOLDER_PATH/PythonApp/\"\nrsync -a --delete \\\n  \"$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages/\" \\\n  \"$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/\"\nif [ \"$EFFECTIVE_PLATFORM_NAME\" = \"-iphonesimulator\" ]; then\n  rsync -a \"$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages-iphonesimulator/\" \"$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/\"\nelif [ \"$EFFECTIVE_PLATFORM_NAME\" = \"-iphoneos\" ]; then\n  rsync -a \"$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages-iphoneos/\" \"$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/\"\nelse\n  echo \"Unsupported platform for HermesAgentSample Python packages: $EFFECTIVE_PLATFORM_NAME\"\n  exit 1\nfi\nexport EXPANDED_CODE_SIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:--}\"\nexport EXPANDED_CODE_SIGN_IDENTITY_NAME=\"${EXPANDED_CODE_SIGN_IDENTITY_NAME:-Sign to Run Locally}\"\nsource \"$PROJECT_DIR/../../Vendor/Python.xcframework/build/utils.sh\"\ninstall_python \"../../Vendor/Python.xcframework\" \"PythonApp/site-packages\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		637B5C9E54D1B7257526790D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B85D7B0E2450F1BDF3FA8EC8 /* ContentView.swift in Sources */,
+				E0877EEBB28FA5FFB23EC500 /* HermesAgentSampleApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2A470918465CE33C51BC52CF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		3B790A60DB33D400CBF654F8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		7B753592426834B09EECA3D8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				INFOPLIST_FILE = HermesAgentSample/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.daysail.HermesAgentSample;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E1DD6C9BA8F52962E166CBDE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				INFOPLIST_FILE = HermesAgentSample/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.daysail.HermesAgentSample;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		475135F7DA6FB5C5C606D782 /* Build configuration list for PBXNativeTarget "HermesAgentSample" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7B753592426834B09EECA3D8 /* Debug */,
+				E1DD6C9BA8F52962E166CBDE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B15A9437FD8EC1EF235BC895 /* Build configuration list for PBXProject "HermesAgentSample" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2A470918465CE33C51BC52CF /* Debug */,
+				3B790A60DB33D400CBF654F8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		280DA97F67D82E1DEBF4515F /* XCLocalSwiftPackageReference "../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4BB96E7A52833DF97F37AA5E /* HermesAgentKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HermesAgentKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 33CE063CD8AF3A8BAE8EA432 /* Project object */;
+}

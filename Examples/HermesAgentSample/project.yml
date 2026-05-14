@@ -1,0 +1,69 @@
+name: HermesAgentSample
+options:
+  bundleIdPrefix: com.daysail
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  HermesAgentKit:
+    path: ../..
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: ""
+targets:
+  HermesAgentSample:
+    type: application
+    platform: iOS
+    sources:
+      - path: HermesAgentSample
+        excludes:
+          - PythonApp
+    resources:
+      - path: HermesAgentSample/PythonApp
+        type: folder
+    dependencies:
+      - package: HermesAgentKit
+        product: HermesAgentKit
+    info:
+      path: HermesAgentSample/Info.plist
+      properties:
+        CFBundleDisplayName: Hermes Agent
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "1"
+        UILaunchScreen:
+          UIColorName: ""
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.daysail.HermesAgentSample
+        ENABLE_TESTABILITY: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    postCompileScripts:
+      - name: Process Python libraries
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          rm -rf "$CODESIGNING_FOLDER_PATH/PythonApp"
+          mkdir -p "$CODESIGNING_FOLDER_PATH/PythonApp/site-packages"
+          rsync -a --delete \
+            --exclude "/site-packages/" \
+            --exclude "/site-packages-iphoneos/" \
+            --exclude "/site-packages-iphonesimulator/" \
+            "$PROJECT_DIR/HermesAgentSample/PythonApp/" \
+            "$CODESIGNING_FOLDER_PATH/PythonApp/"
+          rsync -a --delete \
+            "$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages/" \
+            "$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/"
+          if [ "$EFFECTIVE_PLATFORM_NAME" = "-iphonesimulator" ]; then
+            rsync -a "$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages-iphonesimulator/" "$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/"
+          elif [ "$EFFECTIVE_PLATFORM_NAME" = "-iphoneos" ]; then
+            rsync -a "$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages-iphoneos/" "$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/"
+          else
+            echo "Unsupported platform for HermesAgentSample Python packages: $EFFECTIVE_PLATFORM_NAME"
+            exit 1
+          fi
+          export EXPANDED_CODE_SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
+          export EXPANDED_CODE_SIGN_IDENTITY_NAME="${EXPANDED_CODE_SIGN_IDENTITY_NAME:-Sign to Run Locally}"
+          source "$PROJECT_DIR/../../Vendor/Python.xcframework/build/utils.sh"
+          install_python "../../Vendor/Python.xcframework" "PythonApp/site-packages"
