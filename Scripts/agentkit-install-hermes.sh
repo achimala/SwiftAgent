@@ -103,6 +103,11 @@ fi
 export EXPANDED_CODE_SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
 export EXPANDED_CODE_SIGN_IDENTITY_NAME="${EXPANDED_CODE_SIGN_IDENTITY_NAME:-Sign to Run Locally}"
 export ARCHS="${ARCHS:-${NATIVE_ARCH_ACTUAL:-$(uname -m)}}"
+case "${EFFECTIVE_PLATFORM_NAME:-}" in
+  -iphoneos|-iphonesimulator)
+    export PLATFORM_FAMILY_NAME="${PLATFORM_FAMILY_NAME:-iOS}"
+    ;;
+esac
 if [ -z "${PRODUCT_BUNDLE_IDENTIFIER:-}" ] && [ -f "$CODESIGNING_FOLDER_PATH/Info.plist" ]; then
   PRODUCT_BUNDLE_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$CODESIGNING_FOLDER_PATH/Info.plist" 2>/dev/null || true)"
 fi
