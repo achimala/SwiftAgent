@@ -16,6 +16,11 @@ private struct ChatEntry: Identifiable, Equatable {
     var title: String
     var body: String
     var isStreaming = false
+    var toolCallID: String?
+    var toolName: String?
+    var toolInput: String?
+    var toolOutput: String?
+    var toolSucceeded: Bool?
 }
 
 private struct ToolEvent: Decodable {
@@ -65,6 +70,27 @@ private enum JSONValue: Decodable, Equatable, CustomStringConvertible {
         } else {
             self = .array(try container.decode([JSONValue].self))
         }
+    }
+
+    var stringValue: String? {
+        if case .string(let value) = self {
+            return value
+        }
+        return nil
+    }
+
+    var objectValue: [String: JSONValue]? {
+        if case .object(let value) = self {
+            return value
+        }
+        return nil
+    }
+
+    var intValue: Int? {
+        if case .number(let value) = self {
+            return Int(value)
+        }
+        return nil
     }
 
     var description: String {
@@ -157,7 +183,8 @@ struct ContentView: View {
                         .frame(height: 1)
                         .id("bottom")
                 }
-                .padding(.vertical, 12)
+                .padding(.top, 28)
+                .padding(.bottom, 12)
             }
             .onChange(of: entries) { _, _ in
                 withAnimation(.easeOut(duration: 0.2)) {
@@ -324,22 +351,17 @@ struct ContentView: View {
         case "interim":
             append(.assistant, title: "Hermes", body: event.payload)
         case "tool_gen":
-            if let tool = decodeToolEvent(event.payload) {
-                append(.tool, title: "Preparing \(tool.name ?? "tool")", body: "Generating arguments...")
-                moveEmptyAssistantToEnd(assistantID)
-            }
+            break
         case "tool_start":
             if let tool = decodeToolEvent(event.payload) {
-                append(.tool, title: "Running \(tool.name ?? "tool")", body: formatArgs(tool.args))
+                appendToolStart(tool)
             } else {
                 append(.tool, title: "Running tool", body: event.payload)
             }
             moveEmptyAssistantToEnd(assistantID)
         case "tool_complete":
             if let tool = decodeToolEvent(event.payload) {
-                let name = tool.name ?? "tool"
-                let title = (tool.ok ?? false) ? "Finished \(name)" : "Failed \(name)"
-                append(.tool, title: title, body: tool.resultPreview ?? "")
+                finishTool(tool)
             } else {
                 append(.tool, title: "Tool finished", body: event.payload)
             }
@@ -363,6 +385,50 @@ struct ContentView: View {
         entries.append(entry)
     }
 
+    private func appendToolStart(_ tool: ToolEvent) {
+        let name = tool.name ?? "tool"
+        let input = formatToolInput(tool)
+        let entry = ChatEntry(
+            kind: .tool,
+            title: displayToolName(name),
+            body: "",
+            isStreaming: true,
+            toolCallID: tool.id,
+            toolName: name,
+            toolInput: input.isEmpty ? nil : input,
+            toolOutput: nil,
+            toolSucceeded: nil
+        )
+        entries.append(entry)
+    }
+
+    private func finishTool(_ tool: ToolEvent) {
+        let name = tool.name ?? "tool"
+        let output = formatToolResult(tool)
+        let ok = tool.ok ?? true
+        if let id = tool.id, let index = entries.lastIndex(where: { $0.toolCallID == id }) {
+            entries[index].title = displayToolName(name)
+            entries[index].toolName = name
+            entries[index].toolOutput = output
+            entries[index].toolSucceeded = ok
+            entries[index].isStreaming = false
+            return
+        }
+
+        let entry = ChatEntry(
+            kind: .tool,
+            title: displayToolName(name),
+            body: "",
+            isStreaming: false,
+            toolCallID: tool.id,
+            toolName: name,
+            toolInput: nil,
+            toolOutput: output,
+            toolSucceeded: ok
+        )
+        entries.append(entry)
+    }
+
     private func appendToAssistant(_ id: UUID, text: String) {
         guard !text.isEmpty, let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].body += text
@@ -372,6 +438,8 @@ struct ContentView: View {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         if entries[index].body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             entries[index].body = fallback.isEmpty ? "(no response text)" : fallback
+        } else {
+            entries[index].body = entries[index].body.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         entries[index].isStreaming = false
     }
@@ -397,19 +465,120 @@ struct ContentView: View {
         return args.map { "\($0.key): \($0.value)" }.sorted().joined(separator: "\n")
     }
 
+    private func formatToolInput(_ tool: ToolEvent) -> String {
+        guard let args = tool.args, !args.isEmpty else { return "" }
+
+        switch tool.name {
+        case "write_file":
+            var parts: [String] = []
+            if let path = args["path"]?.stringValue {
+                parts.append("Path: \(displayPath(path))")
+            }
+            if let content = args["content"]?.stringValue, !content.isEmpty {
+                parts.append("Content:\n\(content)")
+            }
+            return parts.isEmpty ? formatArgs(args) : parts.joined(separator: "\n\n")
+
+        case "read_file":
+            if let path = args["path"]?.stringValue {
+                return "Path: \(displayPath(path))"
+            }
+            return formatArgs(args)
+
+        case "terminal":
+            if let command = args["command"]?.stringValue {
+                return "$ \(command)"
+            }
+            return formatArgs(args)
+
+        default:
+            return formatArgs(args)
+        }
+    }
+
+    private func displayToolName(_ name: String) -> String {
+        name.replacingOccurrences(of: "_", with: " ")
+    }
+
+    private func displayPath(_ path: String) -> String {
+        if path.contains("/Containers/Data/Application/") {
+            return URL(fileURLWithPath: path).lastPathComponent
+        }
+        return path
+    }
+
+
+    private func formatToolResult(_ tool: ToolEvent) -> String {
+        guard let preview = tool.resultPreview, !preview.isEmpty else { return "" }
+        guard let value = decodeJSONValue(preview), let object = value.objectValue else {
+            return preview
+        }
+
+        switch tool.name {
+        case "write_file":
+            let bytes = object["bytes_written"]?.intValue
+            var parts = [bytes.map { "Wrote \($0) bytes" }].compactMap(\.self)
+            if let lint = object["lint"]?.objectValue,
+               let message = lint["message"]?.stringValue,
+               !message.isEmpty {
+                parts.append(message)
+            }
+            return parts.isEmpty ? "File written" : parts.joined(separator: "\n")
+
+        case "read_file":
+            if let content = object["content"]?.stringValue {
+                return cleanReadFileContent(content)
+            }
+            return preview
+
+        case "terminal":
+            var parts: [String] = []
+            if let exitCode = object["exit_code"]?.intValue {
+                parts.append("Exit code \(exitCode)")
+            }
+            if let stdout = object["stdout"]?.stringValue, !stdout.isEmpty {
+                parts.append(stdout)
+            }
+            if let stderr = object["stderr"]?.stringValue, !stderr.isEmpty {
+                parts.append(stderr)
+            }
+            return parts.isEmpty ? "Command finished" : parts.joined(separator: "\n\n")
+
+        default:
+            return object.map { "\($0.key): \($0.value)" }.sorted().joined(separator: "\n")
+        }
+    }
+
+    private func decodeJSONValue(_ text: String) -> JSONValue? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
+    private func cleanReadFileContent(_ content: String) -> String {
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
+        let cleaned = lines.map { line in
+            let text = String(line)
+            guard let separator = text.firstIndex(of: "|") else { return text }
+            let prefix = text[..<separator]
+            guard prefix.trimmingCharacters(in: .whitespaces).allSatisfy(\.isNumber) else { return text }
+            return String(text[text.index(after: separator)...])
+        }
+        return cleaned.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func finalResponse(from raw: String) -> String {
         guard let data = raw.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
-            return raw
+            return raw.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if let response = object["final_response"] as? String {
-            return response
+            return response.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if let error = object["error"] as? String, !error.isEmpty {
-            return error
+            return error.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        return raw
+        return raw.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var transcriptText: String {
@@ -454,13 +623,32 @@ private struct ChatRow: View {
     }
 
     private var bubble: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
+            if entry.kind == .tool {
+                toolContent
+            } else {
+                header
+                Text(entry.body.isEmpty ? " " : entry.body)
+                    .font(textFont)
+                    .textSelection(.enabled)
+                    .foregroundStyle(foreground)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(.horizontal, horizontalPadding)
+        .padding(.vertical, verticalPadding)
+        .background(background)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .frame(maxWidth: maxWidth, alignment: entry.kind == .user ? .trailing : .leading)
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        if entry.kind != .assistant, entry.kind != .user {
             HStack(spacing: 6) {
-                if entry.kind != .user {
-                    Image(systemName: iconName)
-                        .font(.caption)
-                        .foregroundStyle(iconColor)
-                }
+                Image(systemName: iconName)
+                    .font(.caption)
+                    .foregroundStyle(iconColor)
                 Text(entry.title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -469,18 +657,51 @@ private struct ChatRow: View {
                         .controlSize(.mini)
                 }
             }
+        } else if entry.isStreaming {
+            ProgressView()
+                .controlSize(.small)
+        }
+    }
 
-            Text(entry.body.isEmpty ? " " : entry.body)
-                .font(textFont)
+    private var toolContent: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 7) {
+                Image(systemName: toolIconName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(toolIconColor)
+                Text(toolTitle)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                if entry.isStreaming {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+            }
+
+            if let input = entry.toolInput, !input.isEmpty {
+                toolSection("Input", text: input)
+            }
+
+            if let output = entry.toolOutput, !output.isEmpty {
+                if entry.toolInput?.isEmpty == false {
+                    Divider()
+                }
+                toolSection("Output", text: output)
+            }
+        }
+    }
+
+    private func toolSection(_ title: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(text)
+                .font(.system(.footnote, design: .monospaced))
                 .textSelection(.enabled)
-                .foregroundStyle(foreground)
+                .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 11)
-        .background(background)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .frame(maxWidth: maxWidth, alignment: entry.kind == .user ? .trailing : .leading)
     }
 
     private var maxWidth: CGFloat {
@@ -499,9 +720,9 @@ private struct ChatRow: View {
         case .user:
             Color(uiColor: .secondarySystemBackground)
         case .assistant:
-            Color(uiColor: .systemBackground)
+            Color.clear
         case .tool:
-            Color(uiColor: .tertiarySystemBackground)
+            Color(uiColor: .secondarySystemBackground)
         case .status:
             Color(uiColor: .secondarySystemBackground).opacity(0.7)
         case .error:
@@ -517,11 +738,43 @@ private struct ChatRow: View {
 
     private var textFont: Font {
         switch entry.kind {
-        case .tool, .debug:
+        case .debug:
             .system(.footnote, design: .monospaced)
         default:
             .body
         }
+    }
+
+    private var horizontalPadding: CGFloat {
+        entry.kind == .assistant ? 0 : 13
+    }
+
+    private var verticalPadding: CGFloat {
+        entry.kind == .assistant ? 3 : 11
+    }
+
+    private var cornerRadius: CGFloat {
+        entry.kind == .tool ? 12 : 16
+    }
+
+    private var toolTitle: String {
+        let verb: String
+        if entry.isStreaming {
+            verb = "Running"
+        } else if entry.toolSucceeded == false {
+            verb = "Failed"
+        } else {
+            verb = "Used"
+        }
+        return "\(verb) \(entry.title)"
+    }
+
+    private var toolIconName: String {
+        entry.toolSucceeded == false ? "exclamationmark.triangle" : "terminal"
+    }
+
+    private var toolIconColor: Color {
+        entry.toolSucceeded == false ? .red : .secondary
     }
 
     private var iconName: String {
