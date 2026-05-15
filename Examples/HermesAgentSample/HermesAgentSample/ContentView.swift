@@ -9,6 +9,7 @@ private struct ChatEntry: Identifiable, Equatable {
         case status
         case error
         case debug
+        case reasoning
     }
 
     let id = UUID()
@@ -56,6 +57,20 @@ private struct TimingEvent: Decodable {
         case label
         case elapsedMs = "elapsed_ms"
         case detail
+    }
+}
+
+private struct HermesChatResult: Decodable {
+    let finalResponse: String?
+    let lastReasoning: String?
+    let error: String?
+    let reasoningTokens: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case finalResponse = "final_response"
+        case lastReasoning = "last_reasoning"
+        case error
+        case reasoningTokens = "reasoning_tokens"
     }
 }
 
@@ -140,6 +155,8 @@ struct ContentView: View {
     @State private var isRunning = false
     @State private var showingSettings = false
     @State private var timingEvents: [UUID: [TimingEvent]] = [:]
+    @State private var activeReasoningEntries: [UUID: UUID] = [:]
+    @State private var assistantIDsWithReasoning: Set<UUID> = []
     @FocusState private var draftFocused: Bool
 
     var body: some View {
@@ -330,7 +347,10 @@ struct ContentView: View {
                 }
 
                 await MainActor.run {
-                    finishAssistant(assistantID, fallback: finalResponse(from: final))
+                    let result = chatResult(from: final)
+                    finishAssistant(assistantID, fallback: finalResponse(from: result, raw: final))
+                    appendFinalReasoning(result?.lastReasoning, assistantID: assistantID)
+                    stopReasoningSpinner(for: assistantID)
                     appendTimingSummary(for: assistantID)
                     Self.writeProbeOutput(transcriptText)
                     isRunning = false
@@ -338,6 +358,7 @@ struct ContentView: View {
             } catch {
                 await MainActor.run {
                     finishAssistant(assistantID, fallback: "")
+                    stopReasoningSpinner(for: assistantID)
                     append(.error, title: "Error", body: String(describing: error))
                     appendTimingSummary(for: assistantID)
                     Self.writeProbeOutput(transcriptText)
@@ -363,12 +384,17 @@ struct ContentView: View {
     private func handle(event: HermesChatEvent, assistantID: UUID) {
         switch event.kind {
         case "delta":
+            endActiveReasoningChunk(for: assistantID)
             appendToAssistant(assistantID, text: event.payload)
         case "interim":
+            endActiveReasoningChunk(for: assistantID)
             append(.assistant, title: "Hermes", body: event.payload)
+        case "reasoning_delta":
+            appendReasoning(event.payload, assistantID: assistantID)
         case "tool_gen":
-            break
+            endActiveReasoningChunk(for: assistantID)
         case "tool_start":
+            endActiveReasoningChunk(for: assistantID)
             if let tool = decodeToolEvent(event.payload) {
                 appendToolStart(tool)
             } else {
@@ -376,6 +402,7 @@ struct ContentView: View {
             }
             moveEmptyAssistantToEnd(assistantID)
         case "tool_complete":
+            endActiveReasoningChunk(for: assistantID)
             if let tool = decodeToolEvent(event.payload) {
                 finishTool(tool)
             } else {
@@ -383,11 +410,12 @@ struct ContentView: View {
             }
             moveEmptyAssistantToEnd(assistantID)
         case "tool_progress":
-            break
+            endActiveReasoningChunk(for: assistantID)
         case "timing":
             recordTiming(event.payload, assistantID: assistantID)
         case "done":
             stopAssistantSpinner(assistantID)
+            stopReasoningSpinner(for: assistantID)
         case "error":
             append(.error, title: "Hermes Error", body: event.payload)
         default:
@@ -479,6 +507,65 @@ struct ContentView: View {
     private func appendToAssistant(_ id: UUID, text: String) {
         guard !text.isEmpty, let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].body += text
+    }
+
+    private func appendReasoning(_ text: String, assistantID: UUID) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        assistantIDsWithReasoning.insert(assistantID)
+
+        if let reasoningID = activeReasoningEntries[assistantID],
+           let index = entries.firstIndex(where: { $0.id == reasoningID }) {
+            entries[index].body += text
+            entries[index].isStreaming = true
+            return
+        }
+
+        let reasoningID = append(
+            .reasoning,
+            title: "Reasoning summary",
+            body: text.trimmingCharacters(in: .whitespacesAndNewlines),
+            isStreaming: true
+        )
+        activeReasoningEntries[assistantID] = reasoningID
+        moveEmptyAssistantToEnd(assistantID)
+    }
+
+    private func appendFinalReasoning(_ text: String?, assistantID: UUID) {
+        let cleaned = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !cleaned.isEmpty, !assistantIDsWithReasoning.contains(assistantID) else { return }
+
+        if let reasoningID = activeReasoningEntries[assistantID],
+           let index = entries.firstIndex(where: { $0.id == reasoningID }) {
+            entries[index].body = cleaned
+            entries[index].isStreaming = false
+            return
+        }
+
+        let entry = ChatEntry(
+            kind: .reasoning,
+            title: "Reasoning summary",
+            body: cleaned,
+            isStreaming: false
+        )
+        if let assistantIndex = entries.firstIndex(where: { $0.id == assistantID }) {
+            entries.insert(entry, at: assistantIndex)
+        } else {
+            entries.append(entry)
+        }
+        activeReasoningEntries[assistantID] = entry.id
+        assistantIDsWithReasoning.insert(assistantID)
+    }
+
+    private func stopReasoningSpinner(for assistantID: UUID) {
+        guard let reasoningID = activeReasoningEntries[assistantID],
+              let index = entries.firstIndex(where: { $0.id == reasoningID })
+        else { return }
+        entries[index].isStreaming = false
+        activeReasoningEntries.removeValue(forKey: assistantID)
+    }
+
+    private func endActiveReasoningChunk(for assistantID: UUID) {
+        stopReasoningSpinner(for: assistantID)
     }
 
     private func finishAssistant(_ id: UUID, fallback: String) {
@@ -583,11 +670,17 @@ struct ContentView: View {
             if let exitCode = object["exit_code"]?.intValue {
                 parts.append("Exit code \(exitCode)")
             }
+            if let output = object["output"]?.stringValue, !output.isEmpty {
+                parts.append(output.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
             if let stdout = object["stdout"]?.stringValue, !stdout.isEmpty {
                 parts.append(stdout)
             }
             if let stderr = object["stderr"]?.stringValue, !stderr.isEmpty {
                 parts.append(stderr)
+            }
+            if let error = object["error"]?.stringValue, !error.isEmpty {
+                parts.append(error)
             }
             return parts.isEmpty ? "Command finished" : parts.joined(separator: "\n\n")
 
@@ -613,16 +706,18 @@ struct ContentView: View {
         return cleaned.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func finalResponse(from raw: String) -> String {
+    private func chatResult(from raw: String) -> HermesChatResult? {
         guard let data = raw.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else {
-            return raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        if let response = object["final_response"] as? String {
+              let result = try? JSONDecoder().decode(HermesChatResult.self, from: data)
+        else { return nil }
+        return result
+    }
+
+    private func finalResponse(from result: HermesChatResult?, raw: String) -> String {
+        if let response = result?.finalResponse {
             return response.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        if let error = object["error"] as? String, !error.isEmpty {
+        if let error = result?.error, !error.isEmpty {
             return error.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -630,7 +725,14 @@ struct ContentView: View {
 
     private var transcriptText: String {
         entries.map { entry in
-            "\(entry.title)\n\(entry.body)"
+            var parts = ["\(entry.title)\n\(entry.body)"]
+            if let input = entry.toolInput, !input.isEmpty {
+                parts.append("Input\n\(input)")
+            }
+            if let output = entry.toolOutput, !output.isEmpty {
+                parts.append("Output\n\(output)")
+            }
+            return parts.joined(separator: "\n\n")
         }
         .joined(separator: "\n\n")
     }
@@ -755,7 +857,7 @@ private struct ChatRow: View {
         switch entry.kind {
         case .user:
             330
-        case .tool, .debug:
+        case .tool, .debug, .reasoning:
             520
         default:
             620
@@ -776,6 +878,8 @@ private struct ChatRow: View {
             Color.red.opacity(0.12)
         case .debug:
             Color(uiColor: .secondarySystemBackground)
+        case .reasoning:
+            Color(uiColor: .tertiarySystemBackground)
         }
     }
 
@@ -785,7 +889,7 @@ private struct ChatRow: View {
 
     private var textFont: Font {
         switch entry.kind {
-        case .debug:
+        case .debug, .reasoning:
             .system(.footnote, design: .monospaced)
         default:
             .body
@@ -836,6 +940,8 @@ private struct ChatRow: View {
             "exclamationmark.triangle"
         case .debug:
             "doc.text.magnifyingglass"
+        case .reasoning:
+            "brain.head.profile"
         case .user:
             "person"
         }

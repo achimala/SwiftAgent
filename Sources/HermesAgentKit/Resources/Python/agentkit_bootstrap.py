@@ -21,6 +21,14 @@ os.environ.setdefault("HERMES_STREAM_READ_TIMEOUT", "5")
 os.environ.setdefault("HERMES_STREAM_STALE_TIMEOUT", "5")
 os.environ.setdefault("HERMES_API_CALL_STALE_TIMEOUT", "5")
 
+IOS_RUNTIME_PROMPT = """iOS runtime notes:
+- You are running inside the HermesAgentSample iOS app sandbox. Files outside the app container are not generally available.
+- The terminal tool uses an embedded iOS shell, not a normal macOS/Linux shell.
+- Prefer the file tools for reading and writing known files.
+- When using terminal, use simple commands that are available in the embedded shell, such as pwd, echo, cat, sed, grep, find, head, wc, and rg.
+- Do not use python, python3, bash, /bin/sh, /bin/ls, package managers, background processes, or host absolute paths unless a prior command has proven they exist in this runtime.
+"""
+
 
 def _install_ios_terminal_bridge():
     try:
@@ -237,6 +245,7 @@ def _get_agent():
             api_key=_agent_config["api_key"],
             model=_agent_config["model"],
             enabled_toolsets=["safe", "terminal", "file"],
+            ephemeral_system_prompt=IOS_RUNTIME_PROMPT,
             quiet_mode=True,
             skip_memory=True,
             skip_context_files=True,
@@ -456,6 +465,7 @@ def hermes_chat(message):
         def on_reasoning(text):
             if text:
                 emit_first("first_reasoning_delta", f"{len(text)} chars")
+                _emit_stream("reasoning_delta", text)
 
         agent.tool_start_callback = on_tool_start
         agent.tool_complete_callback = on_tool_complete
@@ -474,7 +484,9 @@ def hermes_chat(message):
                 "ok": bool(result.get("completed")) and not result.get("error"),
                 "stage": "chat",
                 "final_response": result.get("final_response"),
+                "last_reasoning": result.get("last_reasoning"),
                 "api_calls": result.get("api_calls"),
+                "reasoning_tokens": result.get("reasoning_tokens"),
                 "completed": result.get("completed"),
                 "error": result.get("error"),
                 "interrupted": result.get("interrupted"),
