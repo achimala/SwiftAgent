@@ -4,5 +4,6 @@
 #include <stdio.h>
 
 void HermesShell_SetThreadStreams(FILE *input, FILE *output, FILE *error);
+void HermesShell_SetPythonInterpreterSlots(int count);
 
 #endif

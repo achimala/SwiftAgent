@@ -24,6 +24,9 @@ char *HermesPython_ConfigureHermes(
     const char *base_url,
     const char *api_key,
     const char *model,
+    int enable_soul,
+    int enable_context,
+    int enable_memory,
     char *error,
     int error_capacity
 );

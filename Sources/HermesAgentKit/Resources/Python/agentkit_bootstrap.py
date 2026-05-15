@@ -10,23 +10,29 @@ import uuid
 
 _hermes_source_path = None
 _agent = None
+_session_db = None
+_conversation_history = []
+_conversation_session_id = None
 _agent_config = {
     "base_url": "https://api.openai.com/v1",
     "api_key": "dummy-key",
     "model": "dummy-model",
+    "enable_soul": True,
+    "enable_context": True,
+    "enable_memory": True,
 }
 
 os.environ.setdefault("HERMES_API_TIMEOUT", "5")
 os.environ.setdefault("HERMES_STREAM_READ_TIMEOUT", "5")
 os.environ.setdefault("HERMES_STREAM_STALE_TIMEOUT", "5")
-os.environ.setdefault("HERMES_API_CALL_STALE_TIMEOUT", "5")
 
 IOS_RUNTIME_PROMPT = """iOS runtime notes:
 - You are running inside the HermesAgentSample iOS app sandbox. Files outside the app container are not generally available.
 - The terminal tool uses an embedded iOS shell, not a normal macOS/Linux shell.
 - Prefer the file tools for reading and writing known files.
-- When using terminal, use simple commands that are available in the embedded shell, such as pwd, echo, cat, sed, grep, find, head, wc, and rg.
-- Do not use python, python3, bash, /bin/sh, /bin/ls, package managers, background processes, or host absolute paths unless a prior command has proven they exist in this runtime.
+- When using terminal, use simple commands that are available in the embedded shell, such as pwd, echo, cat, sed, grep, find, head, wc, rg, sh, python, and python3.
+- For Python, use `python3 -c '...'` for one-liners or write a script file first and run `python3 script.py`. Do not run Python from stdin (`python3 -`, pipes, input redirection, or heredocs), because this iOS shell does not provide reliable stdin delivery to embedded commands.
+- Use `sh -c '...'` for shell snippets. Do not use `sh -lc`, bash, /bin/sh, /bin/ls, package managers, background processes, or host absolute paths unless a prior command has proven they exist in this runtime.
 """
 
 
@@ -62,18 +68,32 @@ def _install_ios_terminal_bridge():
             self.cwd = cwd
             self.env = {}
 
+        def resolve_cwd(self, cwd=None):
+            if not cwd or cwd == "/":
+                return self.cwd
+            try:
+                os.makedirs(cwd, exist_ok=True)
+                probe = os.path.join(cwd, f".agentkit-cwd-probe-{uuid.uuid4().hex}")
+                with open(probe, "w", encoding="utf-8") as f:
+                    f.write("")
+                os.remove(probe)
+                return cwd
+            except OSError:
+                return self.cwd
+
         def execute(self, command, cwd=None, timeout=None, **_kwargs):
             stdin_data = _kwargs.get("stdin_data")
             stdin_path = None
             actual_command = command
+            run_cwd = self.resolve_cwd(cwd)
             if stdin_data is not None:
-                stdin_path = os.path.join(self.cwd, f".agentkit-stdin-{uuid.uuid4().hex}")
+                stdin_path = os.path.join(run_cwd, f".agentkit-stdin-{uuid.uuid4().hex}")
                 with open(stdin_path, "w", encoding="utf-8") as f:
                     f.write(stdin_data)
                 actual_command = f"{command} < {shlex.quote(stdin_path)}"
 
             try:
-                result = _hermes_agentkit.run_shell(actual_command, cwd or self.cwd, int(timeout or 60))
+                result = _hermes_agentkit.run_shell(actual_command, run_cwd, int(timeout or 60))
             finally:
                 if stdin_path:
                     try:
@@ -113,7 +133,7 @@ def _install_ios_terminal_bridge():
                 },
                 ensure_ascii=False,
             )
-        result = _hermes_agentkit.run_shell(command, workdir or env.cwd, int(timeout or 60))
+        result = _hermes_agentkit.run_shell(command, env.resolve_cwd(workdir), int(timeout or 60))
         exit_code = int(result.get("exit_code", -1))
         return json.dumps(
             {
@@ -203,16 +223,29 @@ def hermes_prepare(hermes_source_path=None):
     return json.dumps({"ok": True, "stage": "prepare"}, indent=2, sort_keys=True)
 
 
-def hermes_configure(base_url="", api_key="", model=""):
-    global _agent, _agent_config
+def hermes_configure(
+    base_url="",
+    api_key="",
+    model="",
+    enable_soul=True,
+    enable_context=True,
+    enable_memory=True,
+):
+    global _agent, _agent_config, _conversation_history, _conversation_session_id, _session_db
 
     next_config = {
         "base_url": base_url.strip() or "https://api.openai.com/v1",
         "api_key": api_key.strip() or "dummy-key",
         "model": model.strip() or "dummy-model",
+        "enable_soul": bool(enable_soul),
+        "enable_context": bool(enable_context),
+        "enable_memory": bool(enable_memory),
     }
     if next_config != _agent_config:
         _agent = None
+        _session_db = None
+        _conversation_history = []
+        _conversation_session_id = None
         _agent_config = next_config
     return json.dumps(
         {
@@ -221,14 +254,295 @@ def hermes_configure(base_url="", api_key="", model=""):
             "base_url": _agent_config["base_url"],
             "model": _agent_config["model"],
             "has_api_key": bool(api_key.strip()),
+            "enable_soul": _agent_config["enable_soul"],
+            "enable_context": _agent_config["enable_context"],
+            "enable_memory": _agent_config["enable_memory"],
         },
         indent=2,
         sort_keys=True,
     )
 
 
+def _hermes_home():
+    home = os.environ.get("HERMES_HOME")
+    if home:
+        return home
+    return os.path.join(os.path.expanduser("~"), ".hermes")
+
+
+def _agentkit_session_id_path():
+    return os.path.join(_hermes_home(), "agentkit_session_id")
+
+
+def _save_session_id(session_id):
+    path = _agentkit_session_id_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(session_id)
+
+
+def _make_session_id():
+    return f"agentkit_ios_{uuid.uuid4().hex[:12]}"
+
+
+def _load_or_create_session_id():
+    path = _agentkit_session_id_path()
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            session_id = handle.read().strip()
+            if session_id:
+                return session_id
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
+    session_id = _make_session_id()
+    try:
+        _save_session_id(session_id)
+    except Exception:
+        pass
+    return session_id
+
+
+def _get_session_db():
+    global _session_db
+
+    if _session_db is not None:
+        return _session_db
+    try:
+        from hermes_state import SessionDB
+
+        _session_db = SessionDB()
+        return _session_db
+    except Exception:
+        _session_db = False
+        return None
+
+
+def _load_conversation_history(session_id):
+    db = _get_session_db()
+    if not db:
+        return []
+    try:
+        return db.get_messages_as_conversation(session_id)
+    except Exception:
+        return []
+
+
+def _reset_agent_for_session(session_id, *, load_history=True):
+    global _agent, _conversation_history, _conversation_session_id
+
+    _save_session_id(session_id)
+    _agent = None
+    _conversation_session_id = session_id
+    _conversation_history = _load_conversation_history(session_id) if load_history else []
+
+
+def _ui_content(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict):
+                if item.get("type") == "text":
+                    parts.append(str(item.get("text", "")))
+                elif item.get("type") in {"image", "image_url", "input_image"}:
+                    parts.append("[image]")
+        return "\n".join(part for part in parts if part)
+    if content is None:
+        return ""
+    return str(content)
+
+
+def _ui_timestamp(value):
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+def _session_payload(session_id=None):
+    session_id = session_id or _load_or_create_session_id()
+    db = _get_session_db()
+    messages = []
+    session = None
+    if db:
+        try:
+            session = db.get_session(session_id)
+        except Exception:
+            session = None
+        try:
+            messages = db.get_messages_as_conversation(session_id)
+        except Exception:
+            messages = []
+    return {
+        "id": session_id,
+        "title": (session or {}).get("title") if isinstance(session, dict) else None,
+        "messages": [_message_payload(message) for message in messages],
+    }
+
+
+def _message_payload(message):
+    payload = {
+        "role": message.get("role", ""),
+        "content": _ui_content(message.get("content")),
+    }
+    if message.get("tool_name"):
+        payload["tool_name"] = message.get("tool_name")
+    if message.get("tool_call_id"):
+        payload["tool_call_id"] = message.get("tool_call_id")
+    if message.get("tool_calls"):
+        payload["tool_calls"] = message.get("tool_calls")
+    return payload
+
+
+def hermes_session_state():
+    try:
+        current_id = _load_or_create_session_id()
+        return json.dumps(
+            {
+                "ok": True,
+                "current_session_id": current_id,
+                "current_session": _session_payload(current_id),
+                "sessions": _list_session_payloads(),
+            },
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+    except Exception:
+        return json.dumps(
+            {
+                "ok": False,
+                "traceback": traceback.format_exc(),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+
+
+def _list_session_payloads(limit=50):
+    db = _get_session_db()
+    if not db:
+        return []
+    try:
+        sessions = db.list_sessions_rich(
+            source="ios",
+            limit=limit,
+            order_by_last_active=True,
+        )
+    except Exception:
+        return []
+
+    return [
+        {
+            "id": session.get("id"),
+            "title": session.get("title"),
+            "preview": session.get("preview") or "",
+            "model": session.get("model") or "",
+            "started_at": _ui_timestamp(session.get("started_at")),
+            "last_active": _ui_timestamp(session.get("last_active")),
+            "message_count": session.get("message_count") or 0,
+            "ended_at": _ui_timestamp(session.get("ended_at")),
+        }
+        for session in sessions
+        if session.get("id")
+    ]
+
+
+def hermes_list_sessions():
+    try:
+        return json.dumps(
+            {
+                "ok": True,
+                "current_session_id": _load_or_create_session_id(),
+                "sessions": _list_session_payloads(),
+            },
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+    except Exception:
+        return json.dumps(
+            {
+                "ok": False,
+                "traceback": traceback.format_exc(),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+
+
+def hermes_load_session(session_id=None):
+    try:
+        target = (session_id or "").strip() or _load_or_create_session_id()
+        db = _get_session_db()
+        if db:
+            try:
+                db.reopen_session(target)
+            except Exception:
+                pass
+        _reset_agent_for_session(target, load_history=True)
+        return json.dumps(
+            {
+                "ok": True,
+                "current_session_id": target,
+                "current_session": _session_payload(target),
+                "sessions": _list_session_payloads(),
+            },
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+    except Exception:
+        return json.dumps(
+            {
+                "ok": False,
+                "traceback": traceback.format_exc(),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+
+
+def hermes_new_session():
+    try:
+        old_id = _conversation_session_id or _load_or_create_session_id()
+        db = _get_session_db()
+        if db and old_id:
+            try:
+                db.end_session(old_id, "new_chat")
+            except Exception:
+                pass
+        new_id = _make_session_id()
+        _reset_agent_for_session(new_id, load_history=False)
+        return json.dumps(
+            {
+                "ok": True,
+                "current_session_id": new_id,
+                "current_session": _session_payload(new_id),
+                "sessions": _list_session_payloads(),
+            },
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+    except Exception:
+        return json.dumps(
+            {
+                "ok": False,
+                "traceback": traceback.format_exc(),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+
+
 def _get_agent():
-    global _agent
+    global _agent, _conversation_history, _conversation_session_id
 
     if not _hermes_source_path:
         raise RuntimeError("Hermes source path has not been prepared.")
@@ -240,16 +554,26 @@ def _get_agent():
         _install_ios_terminal_bridge()
         run_agent = importlib.import_module("run_agent")
         agent_class = getattr(run_agent, "AIAgent")
+        session_id = _load_or_create_session_id()
+        session_db = _get_session_db()
+        if _conversation_session_id != session_id:
+            _conversation_history = _load_conversation_history(session_id)
+            _conversation_session_id = session_id
+        enabled_toolsets = ["safe", "terminal", "file"]
+        if _agent_config["enable_memory"]:
+            enabled_toolsets.append("memory")
         _agent = agent_class(
             base_url=_agent_config["base_url"],
             api_key=_agent_config["api_key"],
             model=_agent_config["model"],
-            enabled_toolsets=["safe", "terminal", "file"],
+            enabled_toolsets=enabled_toolsets,
             ephemeral_system_prompt=IOS_RUNTIME_PROMPT,
             quiet_mode=True,
-            skip_memory=True,
-            skip_context_files=True,
-            load_soul_identity=False,
+            skip_memory=not _agent_config["enable_memory"],
+            skip_context_files=not _agent_config["enable_context"],
+            load_soul_identity=_agent_config["enable_soul"],
+            session_id=session_id,
+            session_db=session_db,
         )
     return _agent
 
@@ -375,6 +699,8 @@ def hermes_tool_probe(hermes_source_path=None):
 
 
 def hermes_chat(message):
+    global _conversation_history
+
     try:
         started = time.monotonic()
         first_events = set()
@@ -475,7 +801,14 @@ def hermes_chat(message):
         agent.reasoning_callback = on_reasoning
 
         emit_timing("run_conversation_start")
-        result = agent.run_conversation(message, stream_callback=on_delta)
+        prior_history = list(_conversation_history)
+        result = agent.run_conversation(
+            message,
+            conversation_history=prior_history,
+            stream_callback=on_delta,
+        )
+        if isinstance(result.get("messages"), list):
+            _conversation_history = result["messages"]
         emit_timing("run_conversation_returned")
         _emit_stream("done", "")
         return json.dumps(
@@ -486,6 +819,7 @@ def hermes_chat(message):
                 "final_response": result.get("final_response"),
                 "last_reasoning": result.get("last_reasoning"),
                 "api_calls": result.get("api_calls"),
+                "history_messages": len(_conversation_history),
                 "reasoning_tokens": result.get("reasoning_tokens"),
                 "completed": result.get("completed"),
                 "error": result.get("error"),

@@ -46,19 +46,27 @@ public final class HermesShellRuntime: @unchecked Sendable {
         try initialize(workspace: workspace)
         try prepareRun(cwd: workspace, environment: environment)
 
-        let stdoutURL = workspace
+        let captureDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("HermesAgentKitShell", isDirectory: true)
+        try FileManager.default.createDirectory(at: captureDirectory, withIntermediateDirectories: true)
+
+        let stdoutURL = captureDirectory
             .appendingPathComponent(".agentkit-shell-stdout-\(UUID().uuidString)")
-        let stderrURL = workspace
+        let stderrURL = captureDirectory
             .appendingPathComponent(".agentkit-shell-stderr-\(UUID().uuidString)")
         defer {
             try? FileManager.default.removeItem(at: stdoutURL)
             try? FileManager.default.removeItem(at: stderrURL)
         }
 
-        guard let stdoutFile = fopen(stdoutURL.path, "w+"),
-              let stderrFile = fopen(stderrURL.path, "w+")
-        else {
-            throw HermesShellError.commandFailedToStart(command)
+        guard let stdoutFile = fopen(stdoutURL.path, "w+") else {
+            let message = "\(command) (cwd: \(workspace.path), stdout: \(stdoutURL.path), errno: \(errno))"
+            throw HermesShellError.commandFailedToStart(message)
+        }
+        guard let stderrFile = fopen(stderrURL.path, "w+") else {
+            fclose(stdoutFile)
+            let message = "\(command) (cwd: \(workspace.path), stderr: \(stderrURL.path), errno: \(errno))"
+            throw HermesShellError.commandFailedToStart(message)
         }
         defer {
             fclose(stdoutFile)
@@ -88,6 +96,10 @@ public final class HermesShellRuntime: @unchecked Sendable {
 
     public func smokeTest(cwd: URL? = nil) throws -> String {
         let workspace = try cwd ?? Self.defaultWorkspace()
+            .appendingPathComponent("SmokeTest", isDirectory: true)
+        if cwd == nil {
+            try? FileManager.default.removeItem(at: workspace)
+        }
         try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
 
         let commands = [
@@ -99,6 +111,13 @@ public final class HermesShellRuntime: @unchecked Sendable {
             "find . -type f | xargs grep needle",
             "rg needle . | head -20 > rg-out.txt",
             "cat rg-out.txt",
+            "python3 -c 'print(\"python-c-ok\")'",
+            "echo 'print(\"python-file-ok\")' > probe.py",
+            "python3 probe.py",
+            "python3 -c 'raise SystemExit(7)'",
+            "python3 -c 'open(\"python-created.txt\", \"w\").write(\"created-by-python\\n\")'",
+            "cat python-created.txt",
+            "sh -c 'echo sh-c-ok'",
         ]
 
         var transcript = "WORKSPACE\n\(workspace.path)\n\n"
@@ -134,6 +153,8 @@ public final class HermesShellRuntime: @unchecked Sendable {
         try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
 
         initializeEnvironment()
+        try HermesAgentRuntime.shared.initialize()
+        HermesShell_SetPythonInterpreterSlots(1)
         _ = addCommandList(commandDictionary.path)
 
         let binPath = shellResources.appendingPathComponent("bin", isDirectory: true)
@@ -163,12 +184,6 @@ public final class HermesShellRuntime: @unchecked Sendable {
     }
 
     private static func defaultWorkspace() throws -> URL {
-        let applicationSupport = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        return applicationSupport.appendingPathComponent("HermesShellWorkspace", isDirectory: true)
+        try HermesAgentRuntime.defaultWorkspace()
     }
 }

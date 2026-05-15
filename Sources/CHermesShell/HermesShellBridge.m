@@ -7,3 +7,7 @@ void HermesShell_SetThreadStreams(FILE *input, FILE *output, FILE *error) {
     thread_stdout = output;
     thread_stderr = error;
 }
+
+void HermesShell_SetPythonInterpreterSlots(int count) {
+    numPythonInterpreters = count;
+}

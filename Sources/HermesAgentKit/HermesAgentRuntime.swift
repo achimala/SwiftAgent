@@ -1,4 +1,5 @@
 import CHermesPython
+import Darwin
 import Foundation
 
 public enum HermesAgentKitError: Error, CustomStringConvertible {
@@ -27,21 +28,101 @@ public struct HermesChatConfiguration: Sendable {
     public var baseURL: String
     public var apiKey: String
     public var model: String
+    public var enableSoul: Bool
+    public var enableContext: Bool
+    public var enableMemory: Bool
 
     public init(
         baseURL: String = "https://api.openai.com/v1",
         apiKey: String = "",
-        model: String = "dummy-model"
+        model: String = "dummy-model",
+        enableSoul: Bool = true,
+        enableContext: Bool = true,
+        enableMemory: Bool = true
     ) {
         self.baseURL = baseURL
         self.apiKey = apiKey
         self.model = model
+        self.enableSoul = enableSoul
+        self.enableContext = enableContext
+        self.enableMemory = enableMemory
     }
 }
 
 public struct HermesChatEvent: Sendable {
     public let kind: String
     public let payload: String
+}
+
+public struct HermesPersistedMessage: Decodable, Equatable, Sendable {
+    public let role: String
+    public let content: String
+    public let toolName: String?
+    public let toolCallID: String?
+    public let toolCalls: [HermesPersistedToolCall]?
+
+    enum CodingKeys: String, CodingKey {
+        case role
+        case content
+        case toolName = "tool_name"
+        case toolCallID = "tool_call_id"
+        case toolCalls = "tool_calls"
+    }
+}
+
+public struct HermesPersistedToolCall: Decodable, Equatable, Sendable {
+    public let id: String?
+    public let type: String?
+    public let function: HermesPersistedToolFunction?
+}
+
+public struct HermesPersistedToolFunction: Decodable, Equatable, Sendable {
+    public let name: String?
+    public let arguments: String?
+}
+
+public struct HermesSessionDetail: Decodable, Equatable, Sendable {
+    public let id: String
+    public let title: String?
+    public let messages: [HermesPersistedMessage]
+}
+
+public struct HermesSessionSummary: Decodable, Identifiable, Equatable, Sendable {
+    public let id: String
+    public let title: String?
+    public let preview: String
+    public let model: String
+    public let startedAt: String?
+    public let lastActive: String?
+    public let messageCount: Int
+    public let endedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case preview
+        case model
+        case startedAt = "started_at"
+        case lastActive = "last_active"
+        case messageCount = "message_count"
+        case endedAt = "ended_at"
+    }
+}
+
+public struct HermesSessionState: Decodable, Sendable {
+    public let ok: Bool
+    public let currentSessionID: String?
+    public let currentSession: HermesSessionDetail?
+    public let sessions: [HermesSessionSummary]
+    public let traceback: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case currentSessionID = "current_session_id"
+        case currentSession = "current_session"
+        case sessions
+        case traceback
+    }
 }
 
 private final class HermesStreamCallbackBox {
@@ -81,7 +162,9 @@ public final class HermesAgentRuntime: @unchecked Sendable {
             throw HermesAgentKitError.missingPythonResources
         }
 
+        try configurePersistentEnvironment()
         let appPython = Bundle.main.resourceURL!.appendingPathComponent("PythonApp")
+        configureCertificateEnvironment(appPython: appPython)
         let candidatePaths = [
             home.appendingPathComponent("lib/python3.14"),
             home.appendingPathComponent("lib/python3.14/lib-dynload"),
@@ -99,6 +182,50 @@ public final class HermesAgentRuntime: @unchecked Sendable {
         }
         HermesPython_RegisterShellCallback(Self.shellCallback, nil)
         initialized = true
+    }
+
+    public static func defaultHermesHome() throws -> URL {
+        try applicationSupportDirectory()
+            .appendingPathComponent("HermesHome", isDirectory: true)
+    }
+
+    public static func defaultWorkspace() throws -> URL {
+        try applicationSupportDirectory()
+            .appendingPathComponent("HermesShellWorkspace", isDirectory: true)
+    }
+
+    private static func applicationSupportDirectory() throws -> URL {
+        try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent("HermesAgentKit", isDirectory: true)
+    }
+
+    private func configurePersistentEnvironment() throws {
+        let hermesHome = try Self.defaultHermesHome()
+        let workspace = try Self.defaultWorkspace()
+        try FileManager.default.createDirectory(at: hermesHome, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+
+        setenv("HERMES_HOME", hermesHome.path, 1)
+        setenv("HERMES_IOS_WORKSPACE", workspace.path, 1)
+        setenv("TERMINAL_CWD", workspace.path, 1)
+        setenv("HERMES_SESSION_SOURCE", "ios", 1)
+    }
+
+    private func configureCertificateEnvironment(appPython: URL) {
+        let candidates = [
+            appPython.appendingPathComponent("site-packages/certifi/cacert.pem"),
+        ]
+        guard let certPath = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
+            return
+        }
+
+        setenv("SSL_CERT_FILE", certPath.path, 1)
+        setenv("REQUESTS_CA_BUNDLE", certPath.path, 1)
     }
 
     public func evaluate(_ expression: String) throws -> String {
@@ -154,6 +281,34 @@ public final class HermesAgentRuntime: @unchecked Sendable {
         return try evaluate("__import__('agentkit_bootstrap').hermes_prepare(\(Self.pythonLiteral(hermesSourcePath.path)))")
     }
 
+    public func sessionState(hermesSourcePath: URL) throws -> HermesSessionState {
+        _ = try prepareHermes(hermesSourcePath: hermesSourcePath)
+        return try decodeSessionState(
+            try evaluate("__import__('agentkit_bootstrap').hermes_session_state()")
+        )
+    }
+
+    public func loadSession(_ sessionID: String, hermesSourcePath: URL) throws -> HermesSessionState {
+        _ = try prepareHermes(hermesSourcePath: hermesSourcePath)
+        let raw = try evaluate("__import__('agentkit_bootstrap').hermes_load_session(\(Self.pythonLiteral(sessionID)))")
+        return try decodeSessionState(raw)
+    }
+
+    public func newSession(hermesSourcePath: URL) throws -> HermesSessionState {
+        _ = try prepareHermes(hermesSourcePath: hermesSourcePath)
+        let raw = try evaluate("__import__('agentkit_bootstrap').hermes_new_session()")
+        return try decodeSessionState(raw)
+    }
+
+    private func decodeSessionState(_ raw: String) throws -> HermesSessionState {
+        let data = Data(raw.utf8)
+        let state = try JSONDecoder().decode(HermesSessionState.self, from: data)
+        if !state.ok {
+            throw HermesAgentKitError.python(state.traceback ?? raw)
+        }
+        return state
+    }
+
     public func configureHermes(_ configuration: HermesChatConfiguration) throws -> String {
         lock.lock()
         defer { lock.unlock() }
@@ -164,6 +319,9 @@ public final class HermesAgentRuntime: @unchecked Sendable {
             configuration.baseURL,
             configuration.apiKey,
             configuration.model,
+            configuration.enableSoul ? 1 : 0,
+            configuration.enableContext ? 1 : 0,
+            configuration.enableMemory ? 1 : 0,
             &error,
             Int32(error.count)
         ) else {

@@ -142,18 +142,17 @@ struct ContentView: View {
     @AppStorage("hermes.baseURL") private var baseURL = "https://api.openai.com/v1"
     @AppStorage("hermes.apiKey") private var apiKey = ""
     @AppStorage("hermes.model") private var model = "gpt-4.1-mini"
+    @AppStorage("hermes.enableSoul") private var enableSoul = true
+    @AppStorage("hermes.enableContext") private var enableContext = true
+    @AppStorage("hermes.enableMemory") private var enableMemory = true
 
     @State private var draft = "Create a file named hello.txt that says hello from Hermes, then read it back."
-    @State private var entries: [ChatEntry] = [
-        ChatEntry(
-            kind: .assistant,
-            title: "Hermes",
-            body: "Ready. Configure a model and API key in settings, then send a message.",
-            isStreaming: false
-        ),
-    ]
+    @State private var entries: [ChatEntry] = Self.welcomeEntries()
     @State private var isRunning = false
     @State private var showingSettings = false
+    @State private var showingSessions = false
+    @State private var sessions: [HermesSessionSummary] = []
+    @State private var currentSessionID: String?
     @State private var timingEvents: [UUID: [TimingEvent]] = [:]
     @State private var activeReasoningEntries: [UUID: UUID] = [:]
     @State private var assistantIDsWithReasoning: Set<UUID> = []
@@ -171,31 +170,64 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        runProbe()
+                        refreshSessions()
+                        showingSessions = true
                     } label: {
-                        Image(systemName: "bolt.circle")
+                        Image(systemName: "sidebar.left")
                     }
                     .disabled(isRunning)
-                    .accessibilityLabel("Run probe")
+                    .accessibilityLabel("Sessions")
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
+                    HStack(spacing: 14) {
+                        Button {
+                            createNewSession()
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .disabled(isRunning)
+                        .accessibilityLabel("New chat")
+
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+                        .accessibilityLabel("Settings")
                     }
-                    .accessibilityLabel("Settings")
                 }
+            }
+            .task {
+                loadCurrentSession()
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView(
                     baseURL: $baseURL,
                     apiKey: $apiKey,
                     model: $model,
+                    enableSoul: $enableSoul,
+                    enableContext: $enableContext,
+                    enableMemory: $enableMemory,
                     isRunning: isRunning,
                     onShellProbe: runShellProbe,
                     onHermesProbe: runProbe
+                )
+            }
+            .sheet(isPresented: $showingSessions) {
+                SessionsView(
+                    sessions: sessions,
+                    currentSessionID: currentSessionID,
+                    isRunning: isRunning,
+                    onRefresh: refreshSessions,
+                    onNewSession: {
+                        showingSessions = false
+                        createNewSession()
+                    },
+                    onSelect: { session in
+                        showingSessions = false
+                        loadSession(session.id)
+                    }
                 )
             }
         }
@@ -254,13 +286,212 @@ struct ContentView: View {
     }
 
     private var configuration: HermesChatConfiguration {
-        HermesChatConfiguration(baseURL: baseURL, apiKey: apiKey, model: model)
+        HermesChatConfiguration(
+            baseURL: baseURL,
+            apiKey: apiKey,
+            model: model,
+            enableSoul: enableSoul,
+            enableContext: enableContext,
+            enableMemory: enableMemory
+        )
     }
 
     private var hermesPath: URL? {
         Bundle.main.resourceURL?
             .appendingPathComponent("PythonApp", isDirectory: true)
             .appendingPathComponent("hermes", isDirectory: true)
+    }
+
+    private static func welcomeEntries() -> [ChatEntry] {
+        [
+            ChatEntry(
+                kind: .assistant,
+                title: "Hermes",
+                body: "Ready. Configure a model and API key in settings, then send a message.",
+                isStreaming: false
+            ),
+        ]
+    }
+
+    private func loadCurrentSession() {
+        guard let hermesPath else { return }
+        Task.detached {
+            do {
+                let state = try HermesAgentRuntime.shared.sessionState(hermesSourcePath: hermesPath)
+                await MainActor.run {
+                    applySessionState(state, renderTranscript: true)
+                }
+            } catch {
+                await MainActor.run {
+                    _ = append(.error, title: "Session Error", body: String(describing: error))
+                }
+            }
+        }
+    }
+
+    private func refreshSessions() {
+        guard let hermesPath else { return }
+        Task.detached {
+            do {
+                let state = try HermesAgentRuntime.shared.sessionState(hermesSourcePath: hermesPath)
+                await MainActor.run {
+                    applySessionState(state, renderTranscript: false)
+                }
+            } catch {
+                await MainActor.run {
+                    _ = append(.error, title: "Session Error", body: String(describing: error))
+                }
+            }
+        }
+    }
+
+    private func loadSession(_ sessionID: String) {
+        guard let hermesPath else { return }
+        isRunning = true
+        Task.detached {
+            do {
+                let state = try HermesAgentRuntime.shared.loadSession(sessionID, hermesSourcePath: hermesPath)
+                await MainActor.run {
+                    applySessionState(state, renderTranscript: true)
+                    isRunning = false
+                }
+            } catch {
+                await MainActor.run {
+                    append(.error, title: "Session Error", body: String(describing: error))
+                    isRunning = false
+                }
+            }
+        }
+    }
+
+    private func createNewSession() {
+        guard let hermesPath else { return }
+        isRunning = true
+        Task.detached {
+            do {
+                let state = try HermesAgentRuntime.shared.newSession(hermesSourcePath: hermesPath)
+                await MainActor.run {
+                    applySessionState(state, renderTranscript: true)
+                    draft = ""
+                    isRunning = false
+                }
+            } catch {
+                await MainActor.run {
+                    append(.error, title: "Session Error", body: String(describing: error))
+                    isRunning = false
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func applySessionState(_ state: HermesSessionState, renderTranscript: Bool) {
+        currentSessionID = state.currentSessionID
+        sessions = state.sessions
+        guard renderTranscript else { return }
+
+        entries = entries(from: state.currentSession)
+        timingEvents.removeAll()
+        activeReasoningEntries.removeAll()
+        assistantIDsWithReasoning.removeAll()
+    }
+
+    private func entries(from session: HermesSessionDetail?) -> [ChatEntry] {
+        guard let session, !session.messages.isEmpty else {
+            return Self.welcomeEntries()
+        }
+
+        var rendered: [ChatEntry] = []
+        var pendingTools: [String: (name: String, input: String)] = [:]
+
+        for message in session.messages {
+            switch message.role {
+            case "user":
+                let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !content.isEmpty {
+                    rendered.append(ChatEntry(kind: .user, title: "You", body: content))
+                }
+
+            case "assistant":
+                let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !content.isEmpty {
+                    rendered.append(ChatEntry(kind: .assistant, title: "Hermes", body: content))
+                }
+                for call in message.toolCalls ?? [] {
+                    guard let id = call.id else { continue }
+                    let name = call.function?.name ?? "tool"
+                    let args = decodeToolArguments(call.function?.arguments)
+                    let input = formatToolInput(
+                        ToolEvent(
+                            id: id,
+                            name: name,
+                            args: args,
+                            ok: nil,
+                            resultPreview: nil,
+                            status: nil,
+                            preview: nil,
+                            duration: nil,
+                            isError: nil
+                        )
+                    )
+                    pendingTools[id] = (name, input)
+                }
+
+            case "tool":
+                let callID = message.toolCallID ?? UUID().uuidString
+                let pending = pendingTools.removeValue(forKey: callID)
+                let name = message.toolName ?? pending?.name ?? "tool"
+                let result = formatToolResult(
+                    ToolEvent(
+                        id: callID,
+                        name: name,
+                        args: nil,
+                        ok: !persistedToolResultIsError(message.content),
+                        resultPreview: message.content,
+                        status: nil,
+                        preview: nil,
+                        duration: nil,
+                        isError: nil
+                    )
+                )
+                rendered.append(
+                    ChatEntry(
+                        kind: .tool,
+                        title: displayToolName(name),
+                        body: "",
+                        isStreaming: false,
+                        toolCallID: callID,
+                        toolName: name,
+                        toolInput: pending?.input,
+                        toolOutput: result,
+                        toolSucceeded: !persistedToolResultIsError(message.content)
+                    )
+                )
+
+            default:
+                break
+            }
+        }
+
+        return rendered.isEmpty ? Self.welcomeEntries() : rendered
+    }
+
+    private func decodeToolArguments(_ text: String?) -> [String: JSONValue]? {
+        guard let text, let data = text.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode([String: JSONValue].self, from: data)
+    }
+
+    private func persistedToolResultIsError(_ text: String) -> Bool {
+        guard let value = decodeJSONValue(text), let object = value.objectValue else {
+            return text.lowercased().contains("error")
+        }
+        if object["status"]?.stringValue == "error" {
+            return true
+        }
+        if let success = object["success"], case .bool(false) = success {
+            return true
+        }
+        return object["error"] != nil
     }
 
     private func runProbe() {
@@ -290,7 +521,7 @@ struct ContentView: View {
             Self.writeProbeOutput(text)
 
             await MainActor.run {
-                append(.debug, title: "Probe Output", body: text)
+                append(.debug, title: "Probe Output", body: Self.displayPreview(text))
                 isRunning = false
             }
         }
@@ -311,7 +542,7 @@ struct ContentView: View {
             Self.writeProbeOutput(text)
 
             await MainActor.run {
-                append(.debug, title: "Shell Output", body: text)
+                append(.debug, title: "Shell Output", body: Self.displayPreview(text))
                 isRunning = false
             }
         }
@@ -625,6 +856,22 @@ struct ContentView: View {
             }
             return formatArgs(args)
 
+        case "memory":
+            var parts: [String] = []
+            if let action = args["action"]?.stringValue {
+                parts.append("Action: \(action)")
+            }
+            if let target = args["target"]?.stringValue {
+                parts.append("Target: \(target)")
+            }
+            if let oldText = args["old_text"]?.stringValue, !oldText.isEmpty {
+                parts.append("Match: \(oldText)")
+            }
+            if let content = args["content"]?.stringValue, !content.isEmpty {
+                parts.append("Content:\n\(content)")
+            }
+            return parts.isEmpty ? formatArgs(args) : parts.joined(separator: "\n\n")
+
         default:
             return formatArgs(args)
         }
@@ -683,6 +930,22 @@ struct ContentView: View {
                 parts.append(error)
             }
             return parts.isEmpty ? "Command finished" : parts.joined(separator: "\n\n")
+
+        case "memory":
+            var parts: [String] = []
+            if let message = object["message"]?.stringValue {
+                parts.append(message)
+            }
+            if let usage = object["usage"]?.stringValue {
+                parts.append("Usage: \(usage)")
+            }
+            if let count = object["entry_count"]?.intValue {
+                parts.append("Entries: \(count)")
+            }
+            if let error = object["error"]?.stringValue {
+                parts.append(error)
+            }
+            return parts.isEmpty ? preview : parts.joined(separator: "\n")
 
         default:
             return object.map { "\($0.key): \($0.value)" }.sorted().joined(separator: "\n")
@@ -751,6 +1014,12 @@ struct ContentView: View {
         } catch {
             NSLog("Failed to write Hermes probe output: %@", String(describing: error))
         }
+    }
+
+    nonisolated private static func displayPreview(_ text: String, limit: Int = 20_000) -> String {
+        guard text.count > limit else { return text }
+        let index = text.index(text.startIndex, offsetBy: limit)
+        return String(text[..<index]) + "\n\n... truncated in UI; full output was written to hermes-probe-output.txt"
     }
 }
 
@@ -963,11 +1232,22 @@ private struct SettingsView: View {
     @Binding var baseURL: String
     @Binding var apiKey: String
     @Binding var model: String
+    @Binding var enableSoul: Bool
+    @Binding var enableContext: Bool
+    @Binding var enableMemory: Bool
     let isRunning: Bool
     let onShellProbe: () -> Void
     let onHermesProbe: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+
+    private var hermesHome: URL? {
+        try? HermesAgentRuntime.defaultHermesHome()
+    }
+
+    private var workspace: URL? {
+        try? HermesAgentRuntime.defaultWorkspace()
+    }
 
     var body: some View {
         NavigationStack {
@@ -985,6 +1265,62 @@ private struct SettingsView: View {
                     TextField("Model", text: $model)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                }
+
+                Section("Agent State") {
+                    Toggle("Soul", isOn: $enableSoul)
+                    Toggle("Workspace context", isOn: $enableContext)
+                    Toggle("Persistent memory", isOn: $enableMemory)
+                }
+
+                Section("Files") {
+                    if let hermesHome {
+                        NavigationLink {
+                            FileEditorView(
+                                title: "SOUL.md",
+                                url: hermesHome.appendingPathComponent("SOUL.md"),
+                                placeholder: "Describe the agent identity and style Hermes should use."
+                            )
+                        } label: {
+                            Label("Edit SOUL.md", systemImage: "person.text.rectangle")
+                        }
+
+                        NavigationLink {
+                            FileEditorView(
+                                title: "MEMORY.md",
+                                url: hermesHome
+                                    .appendingPathComponent("memories", isDirectory: true)
+                                    .appendingPathComponent("MEMORY.md"),
+                                placeholder: "Durable agent notes, separated by a line containing §."
+                            )
+                        } label: {
+                            Label("Edit MEMORY.md", systemImage: "brain.head.profile")
+                        }
+
+                        NavigationLink {
+                            FileEditorView(
+                                title: "USER.md",
+                                url: hermesHome
+                                    .appendingPathComponent("memories", isDirectory: true)
+                                    .appendingPathComponent("USER.md"),
+                                placeholder: "Durable user profile entries, separated by a line containing §."
+                            )
+                        } label: {
+                            Label("Edit USER.md", systemImage: "person.crop.circle.badge.checkmark")
+                        }
+                    }
+
+                    if let workspace {
+                        NavigationLink {
+                            FileEditorView(
+                                title: "AGENTS.md",
+                                url: workspace.appendingPathComponent("AGENTS.md"),
+                                placeholder: "Workspace-specific instructions Hermes should follow in this iOS sandbox."
+                            )
+                        } label: {
+                            Label("Edit AGENTS.md", systemImage: "doc.text")
+                        }
+                    }
                 }
 
                 Section("Diagnostics") {
@@ -1014,6 +1350,246 @@ private struct SettingsView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+private struct SessionsView: View {
+    let sessions: [HermesSessionSummary]
+    let currentSessionID: String?
+    let isRunning: Bool
+    let onRefresh: () -> Void
+    let onNewSession: () -> Void
+    let onSelect: (HermesSessionSummary) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        onNewSession()
+                    } label: {
+                        Label("New Chat", systemImage: "plus.circle")
+                    }
+                    .disabled(isRunning)
+                }
+
+                Section("Past Sessions") {
+                    if sessions.isEmpty {
+                        ContentUnavailableView(
+                            "No Sessions",
+                            systemImage: "bubble.left.and.bubble.right",
+                            description: Text("Chats will appear here after Hermes stores them.")
+                        )
+                    } else {
+                        ForEach(sessions) { session in
+                            Button {
+                                onSelect(session)
+                            } label: {
+                                SessionRow(
+                                    session: session,
+                                    isCurrent: session.id == currentSessionID
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isRunning)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Sessions")
+            .navigationBarTitleDisplayMode(.inline)
+            .refreshable {
+                onRefresh()
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        onRefresh()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .disabled(isRunning)
+                    .accessibilityLabel("Refresh sessions")
+                }
+            }
+        }
+    }
+}
+
+private struct SessionRow: View {
+    let session: HermesSessionSummary
+    let isCurrent: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isCurrent ? "checkmark.circle.fill" : "bubble.left")
+                .font(.title3)
+                .foregroundStyle(isCurrent ? .green : .secondary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    if session.endedAt != nil {
+                        Text("Ended")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(uiColor: .tertiarySystemBackground))
+                            .clipShape(Capsule())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if !session.preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(session.preview)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                HStack(spacing: 8) {
+                    Text("\(session.messageCount) messages")
+                    if !session.model.isEmpty {
+                        Text(session.model)
+                    }
+                    if let updated = session.lastActive ?? session.startedAt {
+                        Text(shortTimestamp(updated))
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var title: String {
+        let explicit = session.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !explicit.isEmpty {
+            return explicit
+        }
+        let preview = session.preview.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !preview.isEmpty {
+            return preview
+        }
+        return "Untitled Chat"
+    }
+
+    private func shortTimestamp(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let seconds = Double(trimmed) {
+            let date = Date(timeIntervalSince1970: seconds)
+            return Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
+        }
+        if let date = Self.isoFormatter.date(from: trimmed) ?? Self.isoFormatterWithoutFractions.date(from: trimmed) {
+            return Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
+        }
+        guard trimmed.count > 19 else { return trimmed }
+        return String(trimmed.prefix(19)).replacingOccurrences(of: "T", with: " ")
+    }
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let isoFormatterWithoutFractions: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
+}
+
+private struct FileEditorView: View {
+    let title: String
+    let url: URL
+    let placeholder: String
+
+    @State private var text = ""
+    @State private var status = ""
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TextEditor(text: $text)
+                .font(.system(.body, design: .monospaced))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(placeholder)
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 10)
+                            .allowsHitTesting(false)
+                    }
+                }
+
+            if !status.isEmpty {
+                Text(status)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Save") {
+                    save()
+                }
+            }
+        }
+        .onAppear(perform: load)
+    }
+
+    private func load() {
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            if FileManager.default.fileExists(atPath: url.path) {
+                text = try String(contentsOf: url, encoding: .utf8)
+            }
+            status = url.path
+        } catch {
+            status = String(describing: error)
+        }
+    }
+
+    private func save() {
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try text.write(to: url, atomically: true, encoding: .utf8)
+            status = "Saved \(url.lastPathComponent)"
+        } catch {
+            status = String(describing: error)
         }
     }
 }

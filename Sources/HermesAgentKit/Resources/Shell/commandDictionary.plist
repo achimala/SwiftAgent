@@ -121,6 +121,20 @@
 		<string></string>
 		<string>no</string>
 	</array>
+	<key>python</key>
+	<array>
+		<string>MAIN</string>
+		<string>python_main</string>
+		<string>c:Vh</string>
+		<string>file</string>
+	</array>
+	<key>python3</key>
+	<array>
+		<string>MAIN</string>
+		<string>python3_main</string>
+		<string>c:Vh</string>
+		<string>file</string>
+	</array>
 	<key>pwd</key>
 	<array>
 		<string>shell.framework/shell</string>

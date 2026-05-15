@@ -1,8 +1,13 @@
 #include "HermesPythonBridge.h"
 
 #include <Python/Python.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+extern __thread FILE *thread_stdin;
+extern __thread FILE *thread_stdout;
+extern __thread FILE *thread_stderr;
 
 static int g_initialized = 0;
 static HermesPython_StreamCallback g_stream_callback = NULL;
@@ -18,6 +23,316 @@ static void set_error(char *buffer, int capacity, const char *message) {
         message = "Unknown Python error";
     }
     snprintf(buffer, (size_t)capacity, "%s", message);
+}
+
+static FILE *command_stdout(void) {
+    return thread_stdout != NULL ? thread_stdout : stdout;
+}
+
+static FILE *command_stderr(void) {
+    return thread_stderr != NULL ? thread_stderr : stderr;
+}
+
+static void command_write(FILE *stream, const char *text) {
+    if (stream == NULL || text == NULL || text[0] == '\0') {
+        return;
+    }
+    fputs(text, stream);
+    fflush(stream);
+}
+
+static char *read_all(FILE *stream) {
+    if (stream == NULL) {
+        return strdup("");
+    }
+
+    size_t capacity = 4096;
+    size_t length = 0;
+    char *buffer = (char *)malloc(capacity);
+    if (buffer == NULL) {
+        return NULL;
+    }
+
+    int ch = 0;
+    while ((ch = fgetc(stream)) != EOF) {
+        if (length + 1 >= capacity) {
+            capacity *= 2;
+            char *grown = (char *)realloc(buffer, capacity);
+            if (grown == NULL) {
+                free(buffer);
+                return NULL;
+            }
+            buffer = grown;
+        }
+        buffer[length++] = (char)ch;
+    }
+    buffer[length] = '\0';
+    return buffer;
+}
+
+static int set_python_argv(int argc, char **argv, int start_index, const char *argv0_override) {
+    int py_argc = argc - start_index;
+    if (py_argc < 1) {
+        py_argc = 1;
+    }
+
+    PyObject *list = PyList_New(py_argc);
+    if (list == NULL) {
+        return -1;
+    }
+
+    for (int i = 0; i < py_argc; i++) {
+        const char *value = NULL;
+        if (i == 0 && argv0_override != NULL) {
+            value = argv0_override;
+        } else if (start_index + i < argc && argv[start_index + i] != NULL) {
+            value = argv[start_index + i];
+        } else {
+            value = "";
+        }
+
+        PyObject *item = PyUnicode_FromString(value);
+        if (item == NULL) {
+            Py_DECREF(list);
+            return -1;
+        }
+        PyList_SET_ITEM(list, i, item);
+    }
+
+    int result = PySys_SetObject("argv", list);
+    Py_DECREF(list);
+    return result;
+}
+
+static int run_python_with_capture(int (*runner)(void *context), void *context) {
+    PyObject *io_module = PyImport_ImportModule("io");
+    if (io_module == NULL) {
+        PyErr_Print();
+        return 1;
+    }
+
+    PyObject *stdout_buffer = PyObject_CallMethod(io_module, "StringIO", NULL);
+    PyObject *stderr_buffer = PyObject_CallMethod(io_module, "StringIO", NULL);
+    Py_DECREF(io_module);
+    if (stdout_buffer == NULL || stderr_buffer == NULL) {
+        Py_XDECREF(stdout_buffer);
+        Py_XDECREF(stderr_buffer);
+        PyErr_Print();
+        return 1;
+    }
+
+    PyObject *old_stdout = PySys_GetObject("stdout");
+    PyObject *old_stderr = PySys_GetObject("stderr");
+    Py_XINCREF(old_stdout);
+    Py_XINCREF(old_stderr);
+    PySys_SetObject("stdout", stdout_buffer);
+    PySys_SetObject("stderr", stderr_buffer);
+
+    int status = runner(context);
+
+    PySys_SetObject("stdout", old_stdout ? old_stdout : Py_None);
+    PySys_SetObject("stderr", old_stderr ? old_stderr : Py_None);
+    Py_XDECREF(old_stdout);
+    Py_XDECREF(old_stderr);
+
+    PyObject *stdout_text = PyObject_CallMethod(stdout_buffer, "getvalue", NULL);
+    PyObject *stderr_text = PyObject_CallMethod(stderr_buffer, "getvalue", NULL);
+    Py_DECREF(stdout_buffer);
+    Py_DECREF(stderr_buffer);
+
+    if (stdout_text != NULL) {
+        command_write(command_stdout(), PyUnicode_AsUTF8(stdout_text));
+        Py_DECREF(stdout_text);
+    }
+    if (stderr_text != NULL) {
+        command_write(command_stderr(), PyUnicode_AsUTF8(stderr_text));
+        Py_DECREF(stderr_text);
+    }
+
+    return status;
+}
+
+struct PythonStringContext {
+    const char *code;
+    const char *filename;
+};
+
+static int handle_system_exit(void) {
+    PyObject *type = NULL;
+    PyObject *value = NULL;
+    PyObject *traceback = NULL;
+    PyErr_Fetch(&type, &value, &traceback);
+    PyErr_NormalizeException(&type, &value, &traceback);
+
+    int status = 0;
+    PyObject *code = value ? PyObject_GetAttrString(value, "code") : NULL;
+    if (code == NULL || code == Py_None) {
+        status = 0;
+    } else if (PyLong_Check(code)) {
+        status = (int)PyLong_AsLong(code);
+        if (PyErr_Occurred()) {
+            PyErr_Clear();
+            status = 1;
+        }
+    } else {
+        PyObject *text = PyObject_Str(code);
+        if (text != NULL) {
+            const char *utf8 = PyUnicode_AsUTF8(text);
+            if (utf8 != NULL) {
+                command_write(command_stderr(), utf8);
+                command_write(command_stderr(), "\n");
+            }
+            Py_DECREF(text);
+        }
+        status = 1;
+    }
+
+    Py_XDECREF(code);
+    Py_XDECREF(type);
+    Py_XDECREF(value);
+    Py_XDECREF(traceback);
+    return status;
+}
+
+static int run_python_source(const char *code, const char *filename) {
+    PyObject *main_module = PyImport_AddModule("__main__");
+    if (main_module == NULL) {
+        PyErr_Print();
+        return 1;
+    }
+
+    PyObject *globals = PyModule_GetDict(main_module);
+    if (globals == NULL) {
+        PyErr_Print();
+        return 1;
+    }
+
+    PyObject *name_object = PyUnicode_FromString("__main__");
+    if (name_object != NULL) {
+        PyDict_SetItemString(globals, "__name__", name_object);
+        Py_DECREF(name_object);
+    }
+    if (filename != NULL && filename[0] != '\0') {
+        PyObject *file_object = PyUnicode_FromString(filename);
+        if (file_object != NULL) {
+            PyDict_SetItemString(globals, "__file__", file_object);
+            Py_DECREF(file_object);
+        }
+    } else {
+        PyDict_DelItemString(globals, "__file__");
+        PyErr_Clear();
+    }
+
+    PyObject *result = PyRun_StringFlags(
+        code ? code : "",
+        Py_file_input,
+        globals,
+        globals,
+        NULL
+    );
+    if (result != NULL) {
+        Py_DECREF(result);
+        return 0;
+    }
+
+    if (PyErr_ExceptionMatches(PyExc_SystemExit)) {
+        return handle_system_exit();
+    }
+
+    PyErr_Print();
+    return 1;
+}
+
+static int run_python_string_context(void *raw_context) {
+    struct PythonStringContext *context = (struct PythonStringContext *)raw_context;
+    return run_python_source(context->code, context->filename);
+}
+
+struct PythonFileContext {
+    const char *path;
+};
+
+static int run_python_file_context(void *raw_context) {
+    struct PythonFileContext *context = (struct PythonFileContext *)raw_context;
+    FILE *file = fopen(context->path, "r");
+    if (file == NULL) {
+        fprintf(command_stderr(), "python3: can't open file '%s'\n", context->path);
+        return 1;
+    }
+    char *code = read_all(file);
+    fclose(file);
+    if (code == NULL) {
+        fprintf(command_stderr(), "python3: failed to read file '%s'\n", context->path);
+        return 1;
+    }
+    struct PythonStringContext string_context = { code, context->path };
+    int status = run_python_string_context(&string_context);
+    free(code);
+    return status;
+}
+
+__attribute__((used, visibility("default")))
+int python3_main(int argc, char **argv) {
+    if (!Py_IsInitialized()) {
+        fprintf(command_stderr(), "python3: embedded Python is not initialized\n");
+        return 1;
+    }
+
+    if (argc >= 2 && (strcmp(argv[1], "-V") == 0 || strcmp(argv[1], "--version") == 0)) {
+        fprintf(command_stdout(), "Python %s\n", Py_GetVersion());
+        return 0;
+    }
+
+    if (argc >= 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
+        fprintf(command_stdout(), "usage: python3 [-c command] [script.py|-] [args...]\n");
+        return 0;
+    }
+
+    PyGILState_STATE gil = PyGILState_Ensure();
+    int status = 1;
+
+    if (argc >= 3 && strcmp(argv[1], "-c") == 0) {
+        if (set_python_argv(argc, argv, 2, "-c") != 0) {
+            PyErr_Print();
+            status = 1;
+        } else {
+            struct PythonStringContext context = { argv[2], NULL };
+            status = run_python_with_capture(run_python_string_context, &context);
+        }
+    } else if (argc >= 2 && strcmp(argv[1], "-") == 0) {
+        char *code = read_all(thread_stdin);
+        if (code == NULL) {
+            fprintf(command_stderr(), "python3: failed to read stdin\n");
+            status = 1;
+        } else if (set_python_argv(argc, argv, 1, "-") != 0) {
+            PyErr_Print();
+            status = 1;
+            free(code);
+        } else {
+            struct PythonStringContext context = { code, "<stdin>" };
+            status = run_python_with_capture(run_python_string_context, &context);
+            free(code);
+        }
+    } else if (argc >= 2) {
+        if (set_python_argv(argc, argv, 1, NULL) != 0) {
+            PyErr_Print();
+            status = 1;
+        } else {
+            struct PythonFileContext context = { argv[1] };
+            status = run_python_with_capture(run_python_file_context, &context);
+        }
+    } else {
+        fprintf(command_stderr(), "python3: interactive mode is not available in HermesAgentKit\n");
+        status = 1;
+    }
+
+    PyGILState_Release(gil);
+    return status;
+}
+
+__attribute__((used, visibility("default")))
+int python_main(int argc, char **argv) {
+    return python3_main(argc, argv);
 }
 
 static void set_python_error(char *buffer, int capacity) {
@@ -126,7 +441,10 @@ static PyObject *agentkit_run_shell(PyObject *self, PyObject *args) {
     }
 
     int status = -1;
-    char *output = g_shell_callback(command, cwd, timeout, &status, g_shell_context);
+    char *output = NULL;
+    Py_BEGIN_ALLOW_THREADS
+    output = g_shell_callback(command, cwd, timeout, &status, g_shell_context);
+    Py_END_ALLOW_THREADS
     if (output == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "Native shell callback failed.");
         return NULL;
@@ -381,6 +699,9 @@ char *HermesPython_ConfigureHermes(
     const char *base_url,
     const char *api_key,
     const char *model,
+    int enable_soul,
+    int enable_context,
+    int enable_memory,
     char *error,
     int error_capacity
 ) {
@@ -391,10 +712,13 @@ char *HermesPython_ConfigureHermes(
 
     PyGILState_STATE gil = PyGILState_Ensure();
     PyObject *args = Py_BuildValue(
-        "(sss)",
+        "(sssiii)",
         base_url ? base_url : "",
         api_key ? api_key : "",
-        model ? model : ""
+        model ? model : "",
+        enable_soul ? 1 : 0,
+        enable_context ? 1 : 0,
+        enable_memory ? 1 : 0
     );
     if (args == NULL) {
         set_python_error(error, error_capacity);
