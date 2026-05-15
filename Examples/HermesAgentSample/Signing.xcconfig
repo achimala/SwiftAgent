@@ -1,4 +1,5 @@
 AGENTKIT_SAMPLE_DEVELOPMENT_TEAM =
 AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX = com.daysail
+CODE_SIGN_STYLE = Automatic
 
 #include? "Local.xcconfig"

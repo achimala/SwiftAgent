@@ -113,6 +113,11 @@ if [ -n "${BUILT_PRODUCTS_DIR:-}" ]; then
     if [ -d "$FRAMEWORK_SOURCE" ]; then
       echo "Installing AgentKit binary framework: $FRAMEWORK_NAME.framework"
       rsync -a --delete "$FRAMEWORK_SOURCE/" "$FRAMEWORKS_DESTINATION/$FRAMEWORK_NAME.framework/"
+      if [ "${CODE_SIGNING_ALLOWED:-NO}" = "YES" ] && [ "${EXPANDED_CODE_SIGN_IDENTITY:-}" != "-" ] && [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+        echo "Signing AgentKit binary framework: $FRAMEWORK_NAME.framework"
+        /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" \
+          "$FRAMEWORKS_DESTINATION/$FRAMEWORK_NAME.framework"
+      fi
     fi
   done
 fi
