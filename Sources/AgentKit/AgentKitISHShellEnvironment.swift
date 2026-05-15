@@ -1,6 +1,8 @@
 import AgentKitCore
 import Foundation
+#if os(iOS)
 import AgentKitISH
+#endif
 
 public enum AgentKitISHShellError: Error, CustomStringConvertible {
     case missingRootFS
@@ -23,6 +25,7 @@ public enum AgentKitISHShellError: Error, CustomStringConvertible {
 }
 
 public final class AgentKitISHShellEnvironment: AgentKitShellEnvironment, @unchecked Sendable {
+#if os(iOS)
     private let lock = NSRecursiveLock()
     private var session: OpaquePointer?
     private var mountedWorkspace: URL?
@@ -222,4 +225,15 @@ public final class AgentKitISHShellEnvironment: AgentKitShellEnvironment, @unche
         }
         return "export \(name)=\(shellQuote(value))"
     }
+#else
+    public init() {}
+
+    public func run(_ command: AgentKitShellCommand) throws -> AgentKitShellResult {
+        throw AgentKitISHShellError.missingRootFS
+    }
+
+    public func smokeTest(cwd: URL? = nil) throws -> String {
+        throw AgentKitISHShellError.missingRootFS
+    }
+#endif
 }

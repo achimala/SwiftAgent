@@ -66,11 +66,7 @@ struct ContentView: View {
                 }
             }
             .task {
-                if ProcessInfo.processInfo.arguments.contains("--agentkit-readme-demo") {
-                    loadReadmeDemo()
-                } else {
-                    loadCurrentSession()
-                }
+                loadCurrentSession()
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView(
@@ -184,53 +180,6 @@ struct ContentView: View {
 
     private var usesLocalMLX: Bool {
         provider == "mlx"
-    }
-
-    private func loadReadmeDemo() {
-        isRunning = true
-        draft = ""
-        entries = [
-            ChatEntry(
-                kind: .user,
-                title: "You",
-                body: "Create a project note, save it, search for it with the shell, then read it back."
-            ),
-            ChatEntry(
-                kind: .reasoning,
-                title: "Reasoning summary",
-                body: "I’ll use the app workspace, run a shell search through iSH, then verify the file through Hermes file tools.",
-                isStreaming: true
-            ),
-        ]
-
-        let configuration = HermesAgentConfiguration.openAI(
-            apiKey: "agentkit-readme-demo",
-            model: "gpt-4.1-mini",
-            baseURL: "https://api.openai.com/v1",
-            enableSoul: true,
-            enableContext: true,
-            enableMemory: true
-        )
-
-        Task.detached {
-            let output: String
-            let succeeded: Bool
-            do {
-                let agent = try Self.makeAgent(configuration: configuration)
-                output = try agent.toolProbe()
-                succeeded = Self.probeSucceeded(output)
-            } catch {
-                output = String(describing: error)
-                succeeded = false
-            }
-
-            Self.writeProbeOutput(output)
-
-            await MainActor.run {
-                entries = Self.readmeDemoEntries(succeeded: succeeded, probeOutput: output)
-                isRunning = false
-            }
-        }
     }
 
     nonisolated private static func makeAgent(configuration: HermesAgentConfiguration) throws -> HermesAgent {
@@ -670,73 +619,5 @@ struct ContentView: View {
             return description
         }
         return error.localizedDescription
-    }
-
-    nonisolated private static func probeSucceeded(_ text: String) -> Bool {
-        guard let data = text.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let ok = object["ok"] as? Bool
-        else { return false }
-        return ok
-    }
-
-    nonisolated private static func readmeDemoEntries(succeeded: Bool, probeOutput: String) -> [ChatEntry] {
-        let terminalOutput = succeeded
-            ? "Exit code 0\n./hermes-tool.txt:hermes-tool-needle"
-            : displayPreview(probeOutput, limit: 1_200)
-        let fileOutput = succeeded
-            ? "from write_file\nhermes-tool-needle"
-            : "Tool probe did not complete."
-        let finalBody = succeeded
-            ? "Done. I created the workspace note, found the marker with `rg`, wrote through Hermes file tools, and read the file back from the same AgentKit workspace."
-            : "The demo tool probe failed. The full diagnostic output was written to `hermes-probe-output.txt`."
-
-        return [
-            ChatEntry(
-                kind: .user,
-                title: "You",
-                body: "Create a project note, save it, search for it with the shell, then read it back."
-            ),
-            ChatEntry(
-                kind: .reasoning,
-                title: "Reasoning summary",
-                body: "I’ll use the app workspace, run a shell search through iSH, then verify the file through Hermes file tools."
-            ),
-            ChatEntry(
-                kind: .tool,
-                title: "Terminal",
-                body: "",
-                toolCallID: "readme-terminal",
-                toolName: "terminal",
-                toolInput: "$ rg hermes-tool-needle . | head -20 > hermes-rg.txt",
-                toolOutput: terminalOutput,
-                toolSucceeded: succeeded
-            ),
-            ChatEntry(
-                kind: .tool,
-                title: "Write File",
-                body: "",
-                toolCallID: "readme-write-file",
-                toolName: "write_file",
-                toolInput: "Path: file-tool.txt\n\nContent:\nfrom write_file\nhermes-tool-needle",
-                toolOutput: succeeded ? "Wrote 35 bytes" : "Write failed",
-                toolSucceeded: succeeded
-            ),
-            ChatEntry(
-                kind: .tool,
-                title: "Read File",
-                body: "",
-                toolCallID: "readme-read-file",
-                toolName: "read_file",
-                toolInput: "Path: file-tool.txt",
-                toolOutput: fileOutput,
-                toolSucceeded: succeeded
-            ),
-            ChatEntry(
-                kind: succeeded ? .assistant : .error,
-                title: succeeded ? "Hermes" : "Demo Error",
-                body: finalBody
-            ),
-        ]
     }
 }

@@ -6,6 +6,7 @@ let package = Package(
     name: "AgentKit",
     platforms: [
         .iOS(.v17),
+        .macOS(.v14),
     ],
     products: [
         .library(
@@ -66,27 +67,31 @@ let package = Package(
         ),
         .target(
             name: "CHermesPython",
-            dependencies: ["Python"],
+            dependencies: [
+                .target(name: "Python", condition: .when(platforms: [.iOS])),
+            ],
             publicHeadersPath: "include"
         ),
         .target(
             name: "CHermesShell",
-            dependencies: ["ios_system"],
+            dependencies: [
+                .target(name: "ios_system", condition: .when(platforms: [.iOS])),
+            ],
             publicHeadersPath: "include"
         ),
         .target(
             name: "AgentKit",
             dependencies: [
                 "AgentKitCore",
-                "CHermesShell",
-                "AgentKitISH",
                 "CHermesPython",
-                "awk",
-                "dash",
-                "files",
-                "ios_system",
-                "shell",
-                "text",
+                .target(name: "CHermesShell", condition: .when(platforms: [.iOS])),
+                .target(name: "AgentKitISH", condition: .when(platforms: [.iOS])),
+                .target(name: "awk", condition: .when(platforms: [.iOS])),
+                .target(name: "dash", condition: .when(platforms: [.iOS])),
+                .target(name: "files", condition: .when(platforms: [.iOS])),
+                .target(name: "ios_system", condition: .when(platforms: [.iOS])),
+                .target(name: "shell", condition: .when(platforms: [.iOS])),
+                .target(name: "text", condition: .when(platforms: [.iOS])),
                 .product(name: "HuggingFace", package: "swift-huggingface"),
                 .product(name: "MLXLLM", package: "mlx-swift-lm"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
@@ -102,8 +107,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "AgentKitTests",
-            dependencies: ["AgentKit"]
+            name: "AgentKitCoreTests",
+            dependencies: ["AgentKitCore"]
         ),
     ]
 )

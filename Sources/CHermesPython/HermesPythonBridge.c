@@ -1,5 +1,88 @@
 #include "HermesPythonBridge.h"
 
+#if !__has_include(<Python/Python.h>)
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static void set_error(char *buffer, int capacity, const char *message) {
+    if (buffer == NULL || capacity <= 0) {
+        return;
+    }
+    snprintf(buffer, (size_t)capacity, "%s", message ? message : "Python is unavailable on this platform");
+}
+
+int HermesPython_Initialize(const char *python_home, const char *python_paths, char *error, int error_capacity) {
+    (void)python_home;
+    (void)python_paths;
+    set_error(error, error_capacity, "Embedded Python is only available in iOS app targets.");
+    return -1;
+}
+
+int HermesPython_IsInitialized(void) {
+    return 0;
+}
+
+char *HermesPython_Evaluate(const char *code, char *error, int error_capacity) {
+    (void)code;
+    set_error(error, error_capacity, "Embedded Python is only available in iOS app targets.");
+    return NULL;
+}
+
+char *HermesPython_RunScript(const char *code, char *error, int error_capacity) {
+    (void)code;
+    set_error(error, error_capacity, "Embedded Python is only available in iOS app targets.");
+    return NULL;
+}
+
+void HermesPython_RegisterShellCallback(HermesPython_ShellCallback callback, void *user_context) {
+    (void)callback;
+    (void)user_context;
+}
+
+void HermesPython_RegisterLocalLLMCallback(HermesPython_LocalLLMCallback callback, void *user_context) {
+    (void)callback;
+    (void)user_context;
+}
+
+char *HermesPython_ConfigureHermes(
+    const char *base_url,
+    const char *api_key,
+    const char *model,
+    int enable_soul,
+    int enable_context,
+    int enable_memory,
+    char *error,
+    int error_capacity
+) {
+    (void)base_url;
+    (void)api_key;
+    (void)model;
+    (void)enable_soul;
+    (void)enable_context;
+    (void)enable_memory;
+    set_error(error, error_capacity, "Embedded Python is only available in iOS app targets.");
+    return NULL;
+}
+
+char *HermesPython_Chat(
+    const char *message,
+    HermesPython_StreamCallback callback,
+    void *user_context,
+    char *error,
+    int error_capacity
+) {
+    (void)message;
+    (void)callback;
+    (void)user_context;
+    set_error(error, error_capacity, "Embedded Python is only available in iOS app targets.");
+    return NULL;
+}
+
+void HermesPython_FreeCString(char *value) {
+    free(value);
+}
+#else
 #include <Python/Python.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -796,3 +879,4 @@ char *HermesPython_Chat(
 void HermesPython_FreeCString(char *value) {
     free(value);
 }
+#endif

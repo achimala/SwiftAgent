@@ -1,8 +1,12 @@
+#if os(iOS)
 import CHermesShell
+#endif
 import AgentKitCore
 import Darwin
 import Foundation
+#if os(iOS)
 import ios_system
+#endif
 
 public enum AgentKitIOSShellError: Error, CustomStringConvertible {
     case missingResources
@@ -22,6 +26,7 @@ public enum AgentKitIOSShellError: Error, CustomStringConvertible {
 }
 
 public final class AgentKitIOSShellEnvironment: AgentKitShellEnvironment, @unchecked Sendable {
+#if os(iOS)
     private let lock = NSRecursiveLock()
     private let pythonRuntime = HermesAgentRuntime()
     private var initialized = false
@@ -184,4 +189,15 @@ public final class AgentKitIOSShellEnvironment: AgentKitShellEnvironment, @unche
     private static func defaultWorkspace() throws -> URL {
         try AgentKitPaths.defaultShellWorkspace()
     }
+#else
+    public init() {}
+
+    public func run(_ command: AgentKitShellCommand) throws -> AgentKitShellResult {
+        throw AgentKitIOSShellError.missingResources
+    }
+
+    public func smokeTest(cwd: URL? = nil) throws -> String {
+        throw AgentKitIOSShellError.missingResources
+    }
+#endif
 }

@@ -1,5 +1,7 @@
 import AgentKitCore
+#if os(iOS)
 import ExtensionFoundation
+#endif
 import Foundation
 
 public protocol HermesAgentBackend: Sendable {
@@ -89,10 +91,12 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
         self.client = nil
     }
 
+    #if os(iOS)
     @available(iOS 26.0, *)
     public init(appExtensionPoint: AppExtensionPoint) {
         self.client = ExtensionFoundationHermesXPCClient(appExtensionPoint: appExtensionPoint)
     }
+    #endif
 
     public func prepare(sourceURL: URL) throws -> String {
         try perform { service in
@@ -268,6 +272,7 @@ private final class AgentKitHermesXPCEventSink: NSObject, AgentKitHermesXPCEvent
     }
 }
 
+#if os(iOS)
 @available(iOS 26.0, *)
 private final class ExtensionFoundationHermesXPCClient: HermesExtensionXPCClient, @unchecked Sendable {
     private let appExtensionPoint: AppExtensionPoint
@@ -351,3 +356,4 @@ private final class ExtensionFoundationHermesXPCClient: HermesExtensionXPCClient
         return identity
     }
 }
+#endif
