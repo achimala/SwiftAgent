@@ -1,3 +1,4 @@
+import AgentKitCore
 import Foundation
 import Darwin
 
@@ -101,7 +102,7 @@ public final class HermesAgent: @unchecked Sendable {
     public init(
         configuration: HermesAgentConfiguration,
         sourceURL: URL,
-        runtime: HermesAgentRuntime = .shared,
+        runtime: HermesAgentRuntime = HermesAgentRuntime(),
         shellEnvironment: (any AgentKitShellEnvironment)? = nil,
         modelProvider: (any AgentKitModelProvider)? = nil
     ) {
@@ -121,7 +122,7 @@ public final class HermesAgent: @unchecked Sendable {
         configuration: HermesAgentConfiguration,
         bundle: Bundle = .main,
         bundledSourcePath: String = "PythonApp/hermes",
-        runtime: HermesAgentRuntime = .shared,
+        runtime: HermesAgentRuntime = HermesAgentRuntime(),
         shellEnvironment: (any AgentKitShellEnvironment)? = nil,
         modelProvider: (any AgentKitModelProvider)? = nil
     ) throws {

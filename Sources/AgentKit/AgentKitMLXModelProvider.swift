@@ -1,3 +1,4 @@
+import AgentKitCore
 import Foundation
 import HuggingFace
 import MLX
@@ -28,10 +29,10 @@ public struct AgentKitLocalLLMConfiguration: Sendable {
 }
 
 public actor AgentKitMLXModelProvider: AgentKitModelProvider {
-    public static let shared = AgentKitMLXModelProvider()
-
     private var sessions: [String: ChatSession] = [:]
     private var didConfigureMemory = false
+
+    public init() {}
 
     public func complete(
         request: AgentKitModelRequest,

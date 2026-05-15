@@ -9,6 +9,10 @@ let package = Package(
     ],
     products: [
         .library(
+            name: "AgentKitCore",
+            targets: ["AgentKitCore"]
+        ),
+        .library(
             name: "AgentKit",
             targets: ["AgentKit"]
         ),
@@ -58,6 +62,9 @@ let package = Package(
             checksum: "9a30ac6b3780dd68d2268d10467902214e32333e980c59090faa6099f0d250fc"
         ),
         .target(
+            name: "AgentKitCore"
+        ),
+        .target(
             name: "CHermesPython",
             dependencies: ["Python"],
             publicHeadersPath: "include"
@@ -70,6 +77,7 @@ let package = Package(
         .target(
             name: "AgentKit",
             dependencies: [
+                "AgentKitCore",
                 "CHermesShell",
                 "AgentKitISH",
                 "CHermesPython",

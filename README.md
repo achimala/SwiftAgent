@@ -25,6 +25,8 @@ The public layering is:
 
 This gives us a clean path for future agent implementations: they should target the AgentKit protocols, while Hermes-specific Python and bootstrap code stays behind `HermesAgentRuntime`.
 
+AgentKit does not expose package-level singleton instances. Each `HermesAgent` gets its own runtime facade and provider objects by default, and callers can inject custom shell/model implementations for tests or app-specific behavior. The embedded CPython interpreter is still process-global, so native Python calls are serialized internally; independent agent objects are supported, but true simultaneous Hermes execution needs deeper interpreter/session isolation.
+
 ## App API
 
 The intended app-facing API is:

@@ -1,4 +1,5 @@
 import CHermesShell
+import AgentKitCore
 import Darwin
 import Foundation
 import ios_system
@@ -21,9 +22,8 @@ public enum AgentKitIOSShellError: Error, CustomStringConvertible {
 }
 
 public final class AgentKitIOSShellEnvironment: AgentKitShellEnvironment, @unchecked Sendable {
-    public static let shared = AgentKitIOSShellEnvironment()
-
     private let lock = NSRecursiveLock()
+    private let pythonRuntime = HermesAgentRuntime()
     private var initialized = false
 
     public init() {}
@@ -151,7 +151,7 @@ public final class AgentKitIOSShellEnvironment: AgentKitShellEnvironment, @unche
         try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
 
         initializeEnvironment()
-        try HermesAgentRuntime.shared.initialize()
+        try pythonRuntime.initialize()
         HermesShell_SetPythonInterpreterSlots(1)
         _ = addCommandList(commandDictionary.path)
 

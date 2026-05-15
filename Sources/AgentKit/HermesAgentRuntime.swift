@@ -1,128 +1,7 @@
+import AgentKitCore
 import CHermesPython
 import Darwin
 import Foundation
-import MLXLMCommon
-
-public enum HermesAgentError: Error, CustomStringConvertible {
-    case missingPythonHome(URL)
-    case missingPythonResources
-    case missingHermesSource(URL)
-    case python(String)
-
-    public var description: String {
-        switch self {
-        case .missingPythonHome(let url):
-            "Python home was not found at \(url.path)"
-        case .missingPythonResources:
-            "AgentKit Python resources were not found"
-        case .missingHermesSource(let url):
-            "Bundled Hermes source was not found at \(url.path)"
-        case .python(let message):
-            message
-        }
-    }
-}
-
-public struct HermesProbeResult: Sendable {
-    public let python: String
-    public let hermes: String
-}
-
-public struct HermesChatConfiguration: Sendable {
-    public var baseURL: String
-    public var apiKey: String
-    public var model: String
-    public var enableSoul: Bool
-    public var enableContext: Bool
-    public var enableMemory: Bool
-
-    public init(
-        baseURL: String = "https://api.openai.com/v1",
-        apiKey: String = "",
-        model: String = "dummy-model",
-        enableSoul: Bool = true,
-        enableContext: Bool = true,
-        enableMemory: Bool = true
-    ) {
-        self.baseURL = baseURL
-        self.apiKey = apiKey
-        self.model = model
-        self.enableSoul = enableSoul
-        self.enableContext = enableContext
-        self.enableMemory = enableMemory
-    }
-}
-
-public struct HermesPersistedMessage: Decodable, Equatable, Sendable {
-    public let role: String
-    public let content: String
-    public let toolName: String?
-    public let toolCallID: String?
-    public let toolCalls: [HermesPersistedToolCall]?
-
-    enum CodingKeys: String, CodingKey {
-        case role
-        case content
-        case toolName = "tool_name"
-        case toolCallID = "tool_call_id"
-        case toolCalls = "tool_calls"
-    }
-}
-
-public struct HermesPersistedToolCall: Decodable, Equatable, Sendable {
-    public let id: String?
-    public let type: String?
-    public let function: HermesPersistedToolFunction?
-}
-
-public struct HermesPersistedToolFunction: Decodable, Equatable, Sendable {
-    public let name: String?
-    public let arguments: String?
-}
-
-public struct HermesSessionDetail: Decodable, Equatable, Sendable {
-    public let id: String
-    public let title: String?
-    public let messages: [HermesPersistedMessage]
-}
-
-public struct HermesSessionSummary: Decodable, Identifiable, Equatable, Sendable {
-    public let id: String
-    public let title: String?
-    public let preview: String
-    public let model: String
-    public let startedAt: String?
-    public let lastActive: String?
-    public let messageCount: Int
-    public let endedAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case title
-        case preview
-        case model
-        case startedAt = "started_at"
-        case lastActive = "last_active"
-        case messageCount = "message_count"
-        case endedAt = "ended_at"
-    }
-}
-
-public struct HermesSessionState: Decodable, Sendable {
-    public let ok: Bool
-    public let currentSessionID: String?
-    public let currentSession: HermesSessionDetail?
-    public let sessions: [HermesSessionSummary]
-    public let traceback: String?
-
-    enum CodingKeys: String, CodingKey {
-        case ok
-        case currentSessionID = "current_session_id"
-        case currentSession = "current_session"
-        case sessions
-        case traceback
-    }
-}
 
 private final class HermesStreamCallbackBox {
     let callback: @Sendable (AgentKitEvent) -> Void
@@ -133,12 +12,12 @@ private final class HermesStreamCallbackBox {
 }
 
 public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked Sendable {
-    public static let shared = HermesAgentRuntime()
+    private static let pythonLock = NSRecursiveLock()
 
     private let lock = NSRecursiveLock()
     private var initialized = false
-    private var shellEnvironment: any AgentKitShellEnvironment = AgentKitISHShellEnvironment.shared
-    private var modelProvider: any AgentKitModelProvider = AgentKitMLXModelProvider.shared
+    private var shellEnvironment: any AgentKitShellEnvironment = AgentKitISHShellEnvironment()
+    private var modelProvider: any AgentKitModelProvider = AgentKitMLXModelProvider()
 
     public init() {}
 
@@ -158,11 +37,15 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
         pythonHome: URL? = nil,
         extraPythonPaths: [URL] = []
     ) throws {
+        Self.pythonLock.lock()
+        defer { Self.pythonLock.unlock() }
+
         lock.lock()
         defer { lock.unlock() }
 
         if initialized || HermesPython_IsInitialized() != 0 {
             initialized = true
+            registerCallbacks()
             return
         }
 
@@ -193,8 +76,7 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
         guard status == 0 else {
             throw HermesAgentError.python(String(cString: error))
         }
-        HermesPython_RegisterShellCallback(Self.shellCallback, nil)
-        HermesPython_RegisterLocalLLMCallback(Self.localLLMCallback, nil)
+        registerCallbacks()
         initialized = true
     }
 
@@ -231,6 +113,9 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
     }
 
     public func evaluate(_ expression: String) throws -> String {
+        Self.pythonLock.lock()
+        defer { Self.pythonLock.unlock() }
+
         lock.lock()
         defer { lock.unlock() }
 
@@ -244,6 +129,9 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
     }
 
     public func runScript(_ script: String) throws {
+        Self.pythonLock.lock()
+        defer { Self.pythonLock.unlock() }
+
         lock.lock()
         defer { lock.unlock() }
 
@@ -312,6 +200,9 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
     }
 
     public func configureHermes(_ configuration: HermesChatConfiguration) throws -> String {
+        Self.pythonLock.lock()
+        defer { Self.pythonLock.unlock() }
+
         lock.lock()
         defer { lock.unlock() }
 
@@ -339,6 +230,9 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
         hermesSourcePath: URL,
         onEvent: @escaping @Sendable (AgentKitEvent) -> Void
     ) throws -> String {
+        Self.pythonLock.lock()
+        defer { Self.pythonLock.unlock() }
+
         lock.lock()
         defer { lock.unlock() }
 
@@ -420,9 +314,16 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
 
     private func ensureInitialized() throws {
         if initialized || HermesPython_IsInitialized() != 0 {
+            registerCallbacks()
             return
         }
         try initialize()
+    }
+
+    private func registerCallbacks() {
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        HermesPython_RegisterShellCallback(Self.shellCallback, context)
+        HermesPython_RegisterLocalLLMCallback(Self.localLLMCallback, context)
     }
 
     private func currentShellEnvironment() -> any AgentKitShellEnvironment {
@@ -444,14 +345,19 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
         return "'\(escaped)'"
     }
 
-    private static let shellCallback: HermesPython_ShellCallback = { command, cwd, timeout, status, _ in
+    private static let shellCallback: HermesPython_ShellCallback = { command, cwd, timeout, status, context in
+        guard let context else {
+            status?.pointee = -1
+            return strdup("No AgentKit runtime is registered for shell execution.")
+        }
+        let runtime = Unmanaged<HermesAgentRuntime>.fromOpaque(context).takeUnretainedValue()
         let commandText = command.map(String.init(cString:)) ?? ""
         let cwdURL = cwd
             .map(String.init(cString:))
             .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) }
 
         do {
-            let result = try HermesAgentRuntime.shared.currentShellEnvironment().run(
+            let result = try runtime.currentShellEnvironment().run(
                 commandText,
                 cwd: cwdURL,
                 environment: [
@@ -467,9 +373,13 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
         }
     }
 
-    private static let localLLMCallback: HermesPython_LocalLLMCallback = { requestJSON, _ in
+    private static let localLLMCallback: HermesPython_LocalLLMCallback = { requestJSON, context in
+        guard let context else {
+            return strdup(HermesAgentRuntime.localLLMError("No AgentKit runtime is registered for local model completion."))
+        }
         let requestText = requestJSON.map(String.init(cString:)) ?? "{}"
-        let provider = HermesAgentRuntime.shared.currentModelProvider()
+        let runtime = Unmanaged<HermesAgentRuntime>.fromOpaque(context).takeUnretainedValue()
+        let provider = runtime.currentModelProvider()
         let semaphore = DispatchSemaphore(value: 0)
         final class Box: @unchecked Sendable {
             var value: String?

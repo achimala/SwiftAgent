@@ -1,3 +1,4 @@
+import AgentKitCore
 import Foundation
 import AgentKitISH
 
@@ -22,8 +23,6 @@ public enum AgentKitISHShellError: Error, CustomStringConvertible {
 }
 
 public final class AgentKitISHShellEnvironment: AgentKitShellEnvironment, @unchecked Sendable {
-    public static let shared = AgentKitISHShellEnvironment()
-
     private let lock = NSRecursiveLock()
     private var session: OpaquePointer?
     private var mountedWorkspace: URL?
