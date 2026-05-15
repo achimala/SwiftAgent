@@ -93,7 +93,7 @@ def _install_ios_terminal_bridge():
                 stdin_path = os.path.join(run_cwd, f".agentkit-stdin-{uuid.uuid4().hex}")
                 with open(stdin_path, "w", encoding="utf-8") as f:
                     f.write(stdin_data)
-                actual_command = f"{command} < {shlex.quote(stdin_path)}"
+                actual_command = f"{command} < {shlex.quote(os.path.basename(stdin_path))}"
 
             try:
                 result = _hermes_agentkit.run_shell(actual_command, run_cwd, int(timeout or 60))
@@ -159,6 +159,7 @@ def _install_ios_terminal_bridge():
 
     try:
         import model_tools
+        from tools import file_tools
 
         registry.deregister("terminal")
         registry.register(
@@ -168,6 +169,88 @@ def _install_ios_terminal_bridge():
             handler=terminal_tool._handle_terminal,
             check_fn=lambda: True,
             emoji="\U0001f4bb",
+            max_result_size_chars=100_000,
+        )
+
+        def _ios_host_path(path):
+            raw = str(path or "")
+            if raw.startswith("~"):
+                raw = os.path.expanduser(raw)
+            if not os.path.isabs(raw):
+                raw = os.path.join(workspace, raw)
+            resolved = os.path.abspath(raw)
+            root = os.path.abspath(workspace)
+            if os.path.commonpath([root, resolved]) != root:
+                raise ValueError(f"Path is outside the AgentKit workspace: {path}")
+            return resolved
+
+        def _ios_read_file(args, **_kwargs):
+            try:
+                path = _ios_host_path(args.get("path", ""))
+                offset = max(int(args.get("offset", 1) or 1), 1)
+                limit = min(max(int(args.get("limit", 500) or 500), 1), 2000)
+                if not os.path.exists(path):
+                    return json.dumps({"error": f"File not found: {path}"}, ensure_ascii=False)
+                with open(path, "r", encoding="utf-8", errors="replace") as f:
+                    lines = f.read().splitlines()
+                start = offset - 1
+                selected = lines[start : start + limit]
+                content = "\n".join(f"{idx:6d}|{line}" for idx, line in enumerate(selected, start=offset))
+                return json.dumps(
+                    {
+                        "content": content,
+                        "error": None,
+                        "file_size": os.path.getsize(path),
+                        "is_binary": False,
+                        "is_image": False,
+                        "total_lines": len(lines),
+                        "truncated": len(lines) > start + limit,
+                    },
+                    ensure_ascii=False,
+                )
+            except Exception as exc:
+                return json.dumps({"error": f"Failed to read file: {exc}"}, ensure_ascii=False)
+
+        def _ios_write_file(args, **_kwargs):
+            try:
+                path = _ios_host_path(args.get("path", ""))
+                content = args.get("content", "")
+                if not isinstance(content, str):
+                    return json.dumps({"error": "write_file content must be a string"}, ensure_ascii=False)
+                parent = os.path.dirname(path)
+                dirs_created = not os.path.isdir(parent)
+                os.makedirs(parent, exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                return json.dumps(
+                    {
+                        "bytes_written": len(content.encode("utf-8")),
+                        "dirs_created": dirs_created,
+                        "lint": {"status": "skipped", "message": "iOS direct file bridge"},
+                    },
+                    ensure_ascii=False,
+                )
+            except Exception as exc:
+                return json.dumps({"error": f"Failed to write file: {exc}"}, ensure_ascii=False)
+
+        registry.deregister("read_file")
+        registry.register(
+            name="read_file",
+            toolset="file",
+            schema=file_tools.READ_FILE_SCHEMA,
+            handler=_ios_read_file,
+            check_fn=lambda: True,
+            emoji="\U0001f4d6",
+            max_result_size_chars=100_000,
+        )
+        registry.deregister("write_file")
+        registry.register(
+            name="write_file",
+            toolset="file",
+            schema=file_tools.WRITE_FILE_SCHEMA,
+            handler=_ios_write_file,
+            check_fn=lambda: True,
+            emoji="\U0000270d\U0000fe0f",
             max_result_size_chars=100_000,
         )
         registry.deregister("process")

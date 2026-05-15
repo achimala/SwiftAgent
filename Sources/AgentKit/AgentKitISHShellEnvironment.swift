@@ -60,7 +60,7 @@ public final class AgentKitISHShellEnvironment: AgentKitShellEnvironment, @unche
         let wrappedCommand = """
         cd \(Self.shellQuote(guestCwd))
         \(environmentPrefix)
-        \(command)
+        \(command.command)
         """
 
         var outputPointer: UnsafeMutablePointer<CChar>?

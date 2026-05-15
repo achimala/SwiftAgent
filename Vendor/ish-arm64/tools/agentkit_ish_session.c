@@ -17,6 +17,7 @@
 struct agentkit_ish_session {
     pthread_t thread;
     pthread_mutex_t lock;
+    pthread_mutex_t lifecycle_lock;
     int input_write_fd;
     int input_read_fd;
     int output_read_fd;
@@ -24,8 +25,10 @@ struct agentkit_ish_session {
     char *fakefs_path;
     char *workspace_path;
     uint64_t next_command_id;
+    int shell_status;
     bool started;
     bool closed;
+    bool shell_exited;
 };
 
 struct shell_thread_args {
@@ -109,10 +112,40 @@ static int append_bytes(char **buffer, size_t *used, size_t *capacity, const cha
     return 0;
 }
 
+static void record_shell_exit(struct agentkit_ish_session *session, int status) {
+    pthread_mutex_lock(&session->lifecycle_lock);
+    session->shell_status = status;
+    session->shell_exited = true;
+    pthread_mutex_unlock(&session->lifecycle_lock);
+}
+
+static bool shell_exit_status(struct agentkit_ish_session *session, int *out_status) {
+    pthread_mutex_lock(&session->lifecycle_lock);
+    bool exited = session->shell_exited;
+    if (exited && out_status != NULL)
+        *out_status = session->shell_status;
+    pthread_mutex_unlock(&session->lifecycle_lock);
+    return exited;
+}
+
 static char *remove_marker_line(const char *buffer, const char *marker, int *out_status) {
-    char *marker_start = strstr(buffer, marker);
-    if (marker_start == NULL)
-        return NULL;
+    char *marker_start = (char *)buffer;
+    for (;;) {
+        marker_start = strstr(marker_start, marker);
+        if (marker_start == NULL)
+            return NULL;
+
+        bool starts_line = marker_start == buffer || marker_start[-1] == '\n' || marker_start[-1] == '\r';
+        char *status_start = marker_start + strlen(marker);
+        if (*status_start == ':')
+            status_start++;
+        bool has_status = (*status_start == '-' && status_start[1] >= '0' && status_start[1] <= '9') ||
+            (*status_start >= '0' && *status_start <= '9');
+        if (starts_line && has_status)
+            break;
+
+        marker_start += strlen(marker);
+    }
 
     char *status_start = marker_start + strlen(marker);
     if (*status_start == ':')
@@ -132,6 +165,7 @@ static char *remove_marker_line(const char *buffer, const char *marker, int *out
 }
 
 static int read_until_marker(
+    struct agentkit_ish_session *session,
     int fd,
     const char *marker,
     int timeout_ms,
@@ -181,7 +215,18 @@ static int read_until_marker(
             return -1;
         }
         if (count == 0) {
-            set_error(out_error, "iSH shell closed before %s", marker);
+            int shell_status = -1;
+            if (shell_exit_status(session, &shell_status)) {
+                if (used > 0) {
+                    set_error(out_error, "iSH shell closed before %s (shell status %d, buffered output: %.*s)", marker, shell_status, (int)used, buffer);
+                } else {
+                    set_error(out_error, "iSH shell closed before %s (shell status %d)", marker, shell_status);
+                }
+            } else if (used > 0) {
+                set_error(out_error, "iSH shell closed before %s (buffered output: %.*s)", marker, (int)used, buffer);
+            } else {
+                set_error(out_error, "iSH shell closed before %s", marker);
+            }
             free(buffer);
             return -1;
         }
@@ -217,6 +262,7 @@ static void *run_guest_shell(void *context) {
     agentkit_ish_set_stdio(session->input_read_fd, session->output_write_fd, session->output_write_fd);
     int status = agentkit_ish_run_main(8, argv);
     agentkit_ish_set_stdio(STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO);
+    record_shell_exit(session, status);
     free(bind_arg);
     return (void *)(intptr_t)status;
 }
@@ -243,7 +289,9 @@ int agentkit_ish_session_create(
     session->input_write_fd = -1;
     session->output_read_fd = -1;
     session->output_write_fd = -1;
+    session->shell_status = -1;
     pthread_mutex_init(&session->lock, NULL);
+    pthread_mutex_init(&session->lifecycle_lock, NULL);
     session->fakefs_path = strdup(fakefs_path);
     session->workspace_path = strdup(workspace_path);
     if (session->fakefs_path == NULL || session->workspace_path == NULL) {
@@ -348,6 +396,7 @@ int agentkit_ish_session_run(
     char *output = NULL;
     int status = -1;
     int result = read_until_marker(
+        session,
         session->output_read_fd,
         marker,
         timeout_ms,
@@ -380,6 +429,7 @@ void agentkit_ish_session_destroy(agentkit_ish_session_t *session) {
     if (session->output_read_fd >= 0) close(session->output_read_fd);
     if (session->output_write_fd >= 0) close(session->output_write_fd);
     pthread_mutex_destroy(&session->lock);
+    pthread_mutex_destroy(&session->lifecycle_lock);
     free(session->fakefs_path);
     free(session->workspace_path);
     free(session);

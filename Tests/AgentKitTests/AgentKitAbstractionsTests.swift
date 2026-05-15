@@ -40,6 +40,25 @@ final class AgentKitAbstractionsTests: XCTestCase {
         runtime.setModelProvider(AgentKitMockModelProvider())
     }
 
+    func testISHShellRunsCommandString() throws {
+        let workspace = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AgentKitISHShellTests", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: workspace) }
+
+        let shell = AgentKitISHShellEnvironment()
+        let result = try shell.run(
+            AgentKitShellCommand(
+                command: "echo ish-command-ok > probe.txt && cat probe.txt",
+                cwd: workspace
+            )
+        )
+
+        XCTAssertEqual(result.status, 0)
+        XCTAssertTrue(result.output.contains("ish-command-ok"), result.output)
+    }
+
     func testHermesXPCInterfacesAreConstructible() {
         XCTAssertNotNil(AgentKitHermesXPC.serviceInterface())
         XCTAssertNotNil(AgentKitHermesXPC.eventSinkInterface())
