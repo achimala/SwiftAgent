@@ -233,9 +233,8 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
         Self.pythonLock.lock()
         defer { Self.pythonLock.unlock() }
 
-        lock.lock()
-        defer { lock.unlock() }
-
+        // Do not hold `lock` across HermesPython_Chat. Hermes may call the
+        // native model provider from a Python worker thread during the turn.
         let start = Date()
         func emitTiming(_ label: String, detail: String? = nil) {
             onEvent(
