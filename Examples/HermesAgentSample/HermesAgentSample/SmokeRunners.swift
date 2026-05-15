@@ -1,4 +1,5 @@
 import AgentKit
+import AgentKitMLX
 import Foundation
 
 enum SampleSmokeRunners {
@@ -56,7 +57,7 @@ private enum HermesLocalMLXSmokeRunner {
         await recorder.write("start model=\(modelID)")
 
         do {
-            let agent = try HermesAgent(
+            let agent = try LocalMLXAgentFactory.make(
                 configuration: .localMLX(model: modelID, maxTokens: 64, temperature: 0.1)
             )
             let result = try agent.send(prompt) { event in
@@ -84,7 +85,7 @@ private enum HermesNewSessionSmokeRunner {
         await recorder.write("start")
 
         do {
-            let agent = try HermesAgent(configuration: .localMLX())
+            let agent = try LocalMLXAgentFactory.make(configuration: .localMLX())
             let before = try agent.sessionState()
             await recorder.write("before current=\(before.currentSessionID ?? "nil") sessions=\(before.sessions.count)")
             let state = try agent.newSession()
@@ -117,7 +118,7 @@ private enum HermesMLXSessionCycleSmokeRunner {
         )
 
         do {
-            let agent = try HermesAgent(configuration: configuration)
+            let agent = try LocalMLXAgentFactory.make(configuration: configuration)
             let first = try agent.send("Reply with exactly: first ok") { event in
                 Task {
                     await recorder.write("first event kind=\(event.kind) payload=\(event.payload)")
@@ -162,7 +163,7 @@ private enum HermesMLXStressSmokeRunner {
         )
 
         do {
-            let agent = try HermesAgent(configuration: configuration)
+            let agent = try LocalMLXAgentFactory.make(configuration: configuration)
             for index in 1...4 {
                 let result = try agent.send("Reply with exactly: turn \(index) ok") { event in
                     if event.kind == "timing" || event.kind == "done" {
@@ -216,7 +217,7 @@ private enum HermesMLXToolSmokeRunner {
         )
 
         do {
-            let agent = try HermesAgent(configuration: configuration)
+            let agent = try LocalMLXAgentFactory.make(configuration: configuration)
             _ = try agent.newSession()
             let result = try agent.send("Use the file tools to create tool-smoke.txt containing exactly local mlx tool smoke, then read the file back and answer with its contents.") { event in
                 Task {
@@ -264,6 +265,17 @@ private enum AgentKitISHSmokeRunner {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             await recorder.write("done error=\(message)")
         }
+    }
+}
+
+private enum LocalMLXAgentFactory {
+    static func make(configuration: HermesAgentConfiguration) throws -> HermesAgent {
+        try HermesAgent(
+            configuration: configuration,
+            sourceURL: HermesAgent.bundledSourceURL(),
+            executionMode: .inProcess,
+            modelProvider: AgentKitMLXModelProvider()
+        )
     }
 }
 

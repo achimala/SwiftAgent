@@ -9,6 +9,8 @@ configFiles:
 packages:
   AgentKit:
     path: ../..
+  AgentKitMLX:
+    path: ../../Packages/AgentKitMLX
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -27,6 +29,8 @@ targets:
     dependencies:
       - package: AgentKit
         product: AgentKit
+      - package: AgentKitMLX
+        product: AgentKitMLX
       - target: HermesAgentWorker
         embed: true
     info:

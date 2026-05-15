@@ -11,13 +11,24 @@ private final class HermesStreamCallbackBox {
     }
 }
 
+private actor UnavailableLocalModelProvider: AgentKitModelProvider {
+    func complete(
+        request: AgentKitModelRequest,
+        onEvent: @escaping @Sendable (AgentKitEvent) -> Void
+    ) async throws -> String {
+        HermesAgentRuntime.localLLMError(
+            "No local model provider is installed. Add the AgentKitMLX product and pass AgentKitMLXModelProvider() to HermesAgent for offline MLX."
+        )
+    }
+}
+
 public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked Sendable {
     private static let pythonLock = NSRecursiveLock()
 
     private let lock = NSRecursiveLock()
     private var initialized = false
     private var shellEnvironment: any AgentKitShellEnvironment = AgentKitISHShellEnvironment()
-    private var modelProvider: any AgentKitModelProvider = AgentKitMLXModelProvider()
+    private var modelProvider: any AgentKitModelProvider = UnavailableLocalModelProvider()
 
     public init() {}
 
@@ -403,7 +414,7 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
         return strdup(result.value ?? HermesAgentRuntime.localLLMError("Local model request returned no result."))
     }
 
-    private static func localLLMError(_ message: String) -> String {
+    fileprivate static func localLLMError(_ message: String) -> String {
         let payload = ["error": message]
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]) else {
             return "{\"error\":\"Local MLX request failed.\"}"

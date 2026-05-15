@@ -17,7 +17,7 @@ On iOS 26+, AgentKit can run the agent out of process in an ExtensionKit worker,
 - iSH-backed shell commands inside an app workspace.
 - File read/write tools that work across the iOS host filesystem and the iSH workspace.
 - Mock shell/model providers for tests.
-- A local MLX model provider proof of concept.
+- An optional local MLX model provider proof of concept.
 
 For implementation details, package layout, limitations, and rebuild notes, see [Technical Details](docs/TECHNICAL_DETAILS.md).
 
@@ -126,15 +126,21 @@ let newSession = try agent.newSession()
 let restored = try agent.loadSession(sessionID)
 ```
 
-For offline MLX experiments:
+For offline MLX experiments, add the local `Packages/AgentKitMLX` add-on package and link its `AgentKitMLX` product. This keeps the default `AgentKit` package from resolving or building MLX dependencies unless an app opts into local models.
 
 ```swift
+import AgentKit
+import AgentKitMLX
+
 let agent = try HermesAgent(
     configuration: .localMLX(
         model: AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit,
         maxTokens: 128,
         temperature: 0.2
-    )
+    ),
+    sourceURL: HermesAgent.bundledSourceURL(),
+    executionMode: .inProcess,
+    modelProvider: AgentKitMLXModelProvider()
 )
 ```
 
@@ -175,6 +181,6 @@ Verified in simulator and generic iOS builds:
 - Terminal calls run through a persistent iSH ARM64 Alpine shell.
 - File read/write tools work in the AgentKit workspace.
 - Hermes memory, context, and soul can persist under Application Support.
-- The local MLX provider runs as an offline proof of concept, though the small 2B model is weak at tool use.
+- The optional local MLX add-on runs as an offline proof of concept, though the small 2B model is weak at tool use.
 
 AgentKit is still a proof of concept. Hermes is the only supported agent implementation today, and some desktop-style tools are intentionally unavailable on iOS.

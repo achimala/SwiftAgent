@@ -1,4 +1,5 @@
 import AgentKit
+import AgentKitMLX
 import SwiftUI
 
 struct SettingsView: View {

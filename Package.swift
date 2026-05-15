@@ -18,11 +18,7 @@ let package = Package(
             targets: ["AgentKit"]
         ),
     ],
-    dependencies: [
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm", .upToNextMajor(from: "3.31.3")),
-        .package(url: "https://github.com/huggingface/swift-huggingface", from: "0.9.0"),
-        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
-    ],
+    dependencies: [],
     targets: [
         .binaryTarget(
             name: "Python",
@@ -92,10 +88,6 @@ let package = Package(
                 .target(name: "ios_system", condition: .when(platforms: [.iOS])),
                 .target(name: "shell", condition: .when(platforms: [.iOS])),
                 .target(name: "text", condition: .when(platforms: [.iOS])),
-                .product(name: "HuggingFace", package: "swift-huggingface"),
-                .product(name: "MLXLLM", package: "mlx-swift-lm"),
-                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
-                .product(name: "Tokenizers", package: "swift-transformers"),
             ],
             resources: [
                 .copy("Resources/Python"),

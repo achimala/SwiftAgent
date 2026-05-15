@@ -50,26 +50,6 @@ public struct HermesAgentConfiguration: Sendable {
         )
     }
 
-    public static func localMLX(
-        model: String = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit,
-        maxTokens: Int = 128,
-        temperature: Double = 0.2,
-        enableSoul: Bool = true,
-        enableContext: Bool = true,
-        enableMemory: Bool = true
-    ) -> HermesAgentConfiguration {
-        HermesAgentConfiguration(
-            baseURL: "hermes-local-mlx://chat",
-            apiKey: "local-mlx",
-            model: model,
-            enableSoul: enableSoul,
-            enableContext: enableContext,
-            enableMemory: enableMemory,
-            localMLXMaxTokens: maxTokens,
-            localMLXTemperature: temperature
-        )
-    }
-
     var runtimeConfiguration: HermesChatConfiguration {
         HermesChatConfiguration(
             baseURL: baseURL,

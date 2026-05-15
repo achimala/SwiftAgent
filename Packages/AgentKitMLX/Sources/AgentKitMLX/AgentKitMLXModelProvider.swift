@@ -1,3 +1,4 @@
+import AgentKit
 import AgentKitCore
 import Foundation
 import HuggingFace
@@ -10,6 +11,28 @@ extension ChatSession: @unchecked @retroactive Sendable {}
 
 public enum AgentKitLocalMLXModels {
     public static let qwen35_2BOptiQ4Bit = "mlx-community/Qwen3.5-2B-OptiQ-4bit"
+}
+
+extension HermesAgentConfiguration {
+    public static func localMLX(
+        model: String = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit,
+        maxTokens: Int = 128,
+        temperature: Double = 0.2,
+        enableSoul: Bool = true,
+        enableContext: Bool = true,
+        enableMemory: Bool = true
+    ) -> HermesAgentConfiguration {
+        HermesAgentConfiguration(
+            baseURL: "hermes-local-mlx://chat",
+            apiKey: "local-mlx",
+            model: model,
+            enableSoul: enableSoul,
+            enableContext: enableContext,
+            enableMemory: enableMemory,
+            localMLXMaxTokens: maxTokens,
+            localMLXTemperature: temperature
+        )
+    }
 }
 
 public struct AgentKitLocalLLMConfiguration: Sendable {

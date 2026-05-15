@@ -1,4 +1,5 @@
 import AgentKit
+import AgentKitMLX
 import SwiftUI
 
 struct ContentView: View {
@@ -237,6 +238,15 @@ struct ContentView: View {
     }
 
     nonisolated private static func makeAgent(configuration: HermesAgentConfiguration) throws -> HermesAgent {
+        if configuration.baseURL.hasPrefix("hermes-local-mlx://") {
+            return try HermesAgent(
+                configuration: configuration,
+                sourceURL: HermesAgent.bundledSourceURL(),
+                executionMode: .inProcess,
+                modelProvider: AgentKitMLXModelProvider()
+            )
+        }
+
         if #available(iOS 26.0, *) {
             return try HermesAgent(
                 configuration: configuration,
