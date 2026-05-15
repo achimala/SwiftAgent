@@ -1,4 +1,4 @@
-Build/
+/Build/
 .build/
 .DS_Store
 *.xcuserstate
