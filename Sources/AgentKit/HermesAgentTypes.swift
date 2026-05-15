@@ -23,6 +23,11 @@ public enum HermesAgentError: Error, CustomStringConvertible {
 public struct HermesProbeResult: Sendable {
     public let python: String
     public let hermes: String
+
+    public init(python: String, hermes: String) {
+        self.python = python
+        self.hermes = hermes
+    }
 }
 
 public struct HermesChatConfiguration: Sendable {

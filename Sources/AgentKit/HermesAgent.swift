@@ -97,31 +97,67 @@ public final class HermesAgent: @unchecked Sendable {
     public let sourceURL: URL
     public var configuration: HermesAgentConfiguration
 
-    private let runtime: HermesAgentRuntime
+    private let backend: any HermesAgentBackend
 
     public init(
+        configuration: HermesAgentConfiguration,
+        sourceURL: URL,
+        backend: any HermesAgentBackend
+    ) {
+        self.configuration = configuration
+        self.sourceURL = sourceURL
+        self.backend = backend
+    }
+
+    public convenience init(
+        configuration: HermesAgentConfiguration,
+        sourceURL: URL,
+        executionMode: HermesAgentExecutionMode,
+        runtime: HermesAgentRuntime = HermesAgentRuntime(),
+        shellEnvironment: (any AgentKitShellEnvironment)? = nil,
+        modelProvider: (any AgentKitModelProvider)? = nil
+    ) {
+        switch executionMode {
+        case .automatic, .inProcess:
+            self.init(
+                configuration: configuration,
+                sourceURL: sourceURL,
+                runtime: runtime,
+                shellEnvironment: shellEnvironment,
+                modelProvider: modelProvider
+            )
+        case .extensionProcess:
+            self.init(
+                configuration: configuration,
+                sourceURL: sourceURL,
+                backend: HermesExtensionProcessBackend()
+            )
+        }
+    }
+
+    public convenience init(
         configuration: HermesAgentConfiguration,
         sourceURL: URL,
         runtime: HermesAgentRuntime = HermesAgentRuntime(),
         shellEnvironment: (any AgentKitShellEnvironment)? = nil,
         modelProvider: (any AgentKitModelProvider)? = nil
     ) {
-        self.configuration = configuration
-        self.sourceURL = sourceURL
-        self.runtime = runtime
-
-        if let shellEnvironment {
-            runtime.setShellEnvironment(shellEnvironment)
-        }
-        if let modelProvider {
-            runtime.setModelProvider(modelProvider)
-        }
+        self.init(
+            configuration: configuration,
+            sourceURL: sourceURL,
+            backend: HermesInProcessBackend(
+                runtime: runtime,
+                shellEnvironment: shellEnvironment,
+                modelProvider: modelProvider
+            )
+        )
     }
 
     public convenience init(
         configuration: HermesAgentConfiguration,
         bundle: Bundle = .main,
         bundledSourcePath: String = "PythonApp/hermes",
+        executionMode: HermesAgentExecutionMode = .automatic,
         runtime: HermesAgentRuntime = HermesAgentRuntime(),
         shellEnvironment: (any AgentKitShellEnvironment)? = nil,
         modelProvider: (any AgentKitModelProvider)? = nil
@@ -129,6 +165,7 @@ public final class HermesAgent: @unchecked Sendable {
         try self.init(
             configuration: configuration,
             sourceURL: Self.bundledSourceURL(in: bundle, path: bundledSourcePath),
+            executionMode: executionMode,
             runtime: runtime,
             shellEnvironment: shellEnvironment,
             modelProvider: modelProvider
@@ -164,39 +201,38 @@ public final class HermesAgent: @unchecked Sendable {
     }
 
     public func prepare() throws -> String {
-        try runtime.prepareHermes(hermesSourcePath: sourceURL)
+        try backend.prepare(sourceURL: sourceURL)
     }
 
     public func probe() throws -> HermesProbeResult {
-        try runtime.probe(hermesSourcePath: sourceURL)
+        try backend.probe(sourceURL: sourceURL)
     }
 
     public func toolProbe() throws -> String {
-        try runtime.toolProbe(hermesSourcePath: sourceURL)
+        try backend.toolProbe(sourceURL: sourceURL)
     }
 
     public func send(
         _ message: String,
         onEvent: @escaping @Sendable (AgentKitEvent) -> Void = { _ in }
     ) throws -> String {
-        configuration.applyRuntimeEnvironment()
-        return try runtime.chat(
-            message: message,
-            configuration: configuration.runtimeConfiguration,
-            hermesSourcePath: sourceURL,
+        try backend.send(
+            message,
+            configuration: configuration,
+            sourceURL: sourceURL,
             onEvent: onEvent
         )
     }
 
     public func sessionState() throws -> HermesSessionState {
-        try runtime.sessionState(hermesSourcePath: sourceURL)
+        try backend.sessionState(sourceURL: sourceURL)
     }
 
     public func loadSession(_ sessionID: String) throws -> HermesSessionState {
-        try runtime.loadSession(sessionID, hermesSourcePath: sourceURL)
+        try backend.loadSession(sessionID, sourceURL: sourceURL)
     }
 
     public func newSession() throws -> HermesSessionState {
-        try runtime.newSession(hermesSourcePath: sourceURL)
+        try backend.newSession(sourceURL: sourceURL)
     }
 }

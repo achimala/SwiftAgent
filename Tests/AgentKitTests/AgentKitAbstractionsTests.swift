@@ -39,6 +39,25 @@ final class AgentKitAbstractionsTests: XCTestCase {
         runtime.setShellEnvironment(AgentKitMockShellEnvironment())
         runtime.setModelProvider(AgentKitMockModelProvider())
     }
+
+    func testHermesAgentCanUseInjectedBackend() throws {
+        let backend = MockHermesBackend()
+        let sourceURL = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("HermesSource", isDirectory: true)
+        let agent = HermesAgent(
+            configuration: .openAI(apiKey: "test-key", model: "test-model"),
+            sourceURL: sourceURL,
+            backend: backend
+        )
+
+        let result = try agent.send("hello") { event in
+            XCTAssertEqual(event.kind, "mock")
+        }
+
+        XCTAssertEqual(result, "mock response")
+        XCTAssertEqual(backend.messages, ["hello"])
+        XCTAssertEqual(backend.sourceURLs, [sourceURL])
+    }
 }
 
 private final class EventRecorder: @unchecked Sendable {
@@ -55,5 +74,49 @@ private final class EventRecorder: @unchecked Sendable {
         lock.lock()
         events.append(event)
         lock.unlock()
+    }
+}
+
+private final class MockHermesBackend: HermesAgentBackend, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var messages: [String] = []
+    private(set) var sourceURLs: [URL] = []
+
+    func prepare(sourceURL: URL) throws -> String {
+        "mock prepare"
+    }
+
+    func probe(sourceURL: URL) throws -> HermesProbeResult {
+        HermesProbeResult(python: "python", hermes: "hermes")
+    }
+
+    func toolProbe(sourceURL: URL) throws -> String {
+        "mock tool probe"
+    }
+
+    func send(
+        _ message: String,
+        configuration: HermesAgentConfiguration,
+        sourceURL: URL,
+        onEvent: @escaping @Sendable (AgentKitEvent) -> Void
+    ) throws -> String {
+        lock.lock()
+        messages.append(message)
+        sourceURLs.append(sourceURL)
+        lock.unlock()
+        onEvent(AgentKitEvent(kind: "mock", payload: configuration.model))
+        return "mock response"
+    }
+
+    func sessionState(sourceURL: URL) throws -> HermesSessionState {
+        throw HermesAgentError.python("not implemented")
+    }
+
+    func loadSession(_ sessionID: String, sourceURL: URL) throws -> HermesSessionState {
+        throw HermesAgentError.python("not implemented")
+    }
+
+    func newSession(sourceURL: URL) throws -> HermesSessionState {
+        throw HermesAgentError.python("not implemented")
     }
 }
