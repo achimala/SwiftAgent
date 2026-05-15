@@ -13,6 +13,7 @@ This document collects the lower-level architecture, packaging, and boundary not
 - `Sources/AgentKitCore`: the lightweight protocol/path layer and test doubles.
 - `Sources/AgentKit`: the batteries-included iOS POC target that re-exports `AgentKitCore` and includes Hermes, iSH shell, and iOS shell support.
 - `Packages/AgentKitMLX`: an optional local-model add-on package that carries the MLX/Hugging Face dependencies and `AgentKitMLXModelProvider`.
+- `Packages/AgentKitFoundationModels`: an optional iOS 26+ add-on package that carries `AgentKitFoundationModelsProvider` for Apple Foundation Models.
 - `Examples/HermesAgentSample`: an iOS app that consumes the canonical AgentKit Hermes payload through the build script.
 - `Scripts/update-hermes.sh`: fetches the pinned upstream Hermes release and stages it into ignored `Payloads/Hermes/PythonApp/hermes`.
 - `Scripts/build-native-wheels.sh`: a reproducible recipe for rebuilding the Rust-backed iOS wheels used by OpenAI/Pydantic.
@@ -23,7 +24,7 @@ This document collects the lower-level architecture, packaging, and boundary not
 The public layering is:
 
 - `AgentKitShellEnvironment`: runs shell commands for an agent. Current implementations are `AgentKitISHShellEnvironment` and the older `AgentKitIOSShellEnvironment`.
-- `AgentKitModelProvider`: completes OpenAI-style model requests. Current implementations are the optional `AgentKitMLXModelProvider` add-on and `AgentKitMockModelProvider`.
+- `AgentKitModelProvider`: completes OpenAI-style model requests. Current implementations are the optional `AgentKitMLXModelProvider` and `AgentKitFoundationModelsProvider` add-ons plus `AgentKitMockModelProvider`.
 - `HermesAgentBackend`: owns the execution boundary for a Hermes agent. `HermesInProcessBackend` runs in the host app; `HermesExtensionProcessBackend` launches an ExtensionKit worker over XPC on iOS 26+.
 - `HermesAgentRuntime`: the Hermes-specific adapter that embeds CPython, loads Hermes, and routes Hermes callbacks into the configured AgentKit shell/model providers.
 - `AgentKitMockShellEnvironment` and `AgentKitMockModelProvider`: test doubles for exercising the Hermes bridge without a full app or real model.
@@ -86,6 +87,8 @@ SwiftPM cannot silently add this final app-bundle processing step to a consuming
 
 Local MLX support lives in the separate `Packages/AgentKitMLX` add-on package. The main `AgentKit` package intentionally has no MLX, Hugging Face, or tokenizer package dependencies, so hosted-model apps do not resolve that graph. Apps that want offline local-model experiments can add the add-on package and inject `AgentKitMLXModelProvider` explicitly.
 
+Apple Foundation Models support lives in the separate `Packages/AgentKitFoundationModels` add-on package. It is weak-linked and guarded behind iOS/macOS/visionOS 26 availability. The provider uses the existing Hermes local-model bridge, presents compact native Foundation Models tool schemas for `read_file`, `write_file`, and `terminal`, and returns OpenAI-style tool calls to Hermes for execution.
+
 ## Updating Hermes
 
 Hermes is intentionally not a Git submodule and is not checked into this repository. The build phase fetches the pinned release on demand when the generated payload is missing. CI can either pre-run `./Scripts/update-hermes.sh` for an explicit bootstrap step or set `AGENTKIT_AUTO_FETCH_HERMES=NO` to prevent network access during builds.
@@ -137,6 +140,7 @@ Verified in simulator and generic iOS builds:
 - The iSH guest bind-mounts the AgentKit workspace at `/workspace`, so shell-created files are visible to Python/file tooling.
 - The bundled iSH rootfs includes `python3`, `rg`, `jq`, and `git` for a first useful agent shell POC.
 - A local MLX/Qwen 2B provider can be wired through the optional add-on package and the same model-provider bridge as an offline proof of concept.
+- Apple Foundation Models can be wired through the optional add-on package. On an iPhone 17 Pro Max, direct Hermes chat returned first text in about 5 seconds, and a basic file-tool smoke caused the model to request `write_file`, `read_file`, and `terminal` calls that Hermes executed.
 - The ExtensionKit/XPC backend launches in the simulator and can initialize Python, import Hermes, create a Hermes session, run iSH-backed terminal commands, and use file read/write tools out of process.
 
 ## Known Boundaries
@@ -148,4 +152,5 @@ Verified in simulator and generic iOS builds:
 - The package-level `HermesAgent(configuration:)` convenience initializer still runs in process unless the app explicitly passes `HermesExtensionProcessBackend`. The sample defaults to the extension backend on iOS 26+.
 - The bundled full Alpine fakefs is large; a distributable package should eventually build a smaller purpose-made rootfs.
 - The optional local MLX model provider is a POC. The 2B model can run offline, but it is weak at tool use compared with a hosted model.
+- The optional Foundation Models provider is a POC. It is much faster and more memory-stable than MLX, but Hermes' generic OpenAI-style loop is not an ideal fit for Apple's small context window and native tool design. A first-class AgentKit-native Foundation Models agent is likely cleaner than pushing this through every Hermes feature.
 - Generic `iphoneos` build can be verified with `CODE_SIGNING_ALLOWED=NO`; real device install still needs normal Apple signing/provisioning.

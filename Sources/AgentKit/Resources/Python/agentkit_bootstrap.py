@@ -262,8 +262,9 @@ def _install_ios_terminal_bridge():
     return True
 
 
-def _is_local_mlx_base_url(base_url):
-    return str(base_url or "").startswith("hermes-local-mlx://")
+def _is_local_model_base_url(base_url):
+    value = str(base_url or "")
+    return value.startswith("hermes-local-mlx://") or value.startswith("hermes-foundation-models://")
 
 
 def _local_mlx_content_to_text(content):
@@ -511,7 +512,7 @@ class _LocalMLXOpenAI:
 def _configure_local_mlx_client(run_agent):
     global _original_run_agent_openai, _original_run_agent_openai_cache
 
-    if _is_local_mlx_base_url(_agent_config["base_url"]):
+    if _is_local_model_base_url(_agent_config["base_url"]):
         if _original_run_agent_openai is None:
             _original_run_agent_openai = getattr(run_agent, "OpenAI", None)
             _original_run_agent_openai_cache = getattr(run_agent, "_OPENAI_CLS_CACHE", None)

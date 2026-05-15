@@ -11,6 +11,8 @@ packages:
     path: ../..
   AgentKitMLX:
     path: ../../Packages/AgentKitMLX
+  AgentKitFoundationModels:
+    path: ../../Packages/AgentKitFoundationModels
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -31,6 +33,8 @@ targets:
         product: AgentKit
       - package: AgentKitMLX
         product: AgentKitMLX
+      - package: AgentKitFoundationModels
+        product: AgentKitFoundationModels
       - target: HermesAgentWorker
         embed: true
     info:

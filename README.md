@@ -18,6 +18,7 @@ On iOS 26+, AgentKit can run the agent out of process in an ExtensionKit worker,
 - File read/write tools that work across the iOS host filesystem and the iSH workspace.
 - Mock shell/model providers for tests.
 - An optional local MLX model provider proof of concept.
+- An optional Apple Foundation Models provider experiment for iOS 26+ on-device inference.
 
 For implementation details, package layout, limitations, and rebuild notes, see [Technical Details](docs/TECHNICAL_DETAILS.md).
 
@@ -144,6 +145,20 @@ let agent = try HermesAgent(
 )
 ```
 
+For Apple Foundation Models experiments on iOS 26+, add the local `Packages/AgentKitFoundationModels` add-on package and link its `AgentKitFoundationModels` product:
+
+```swift
+import AgentKit
+import AgentKitFoundationModels
+
+let agent = try HermesAgent(
+    configuration: .foundationModels(maxTokens: 160, temperature: 0.1),
+    sourceURL: HermesAgent.bundledSourceURL(),
+    executionMode: .inProcess,
+    modelProvider: AgentKitFoundationModelsProvider()
+)
+```
+
 ## Try The Sample
 
 ```bash
@@ -182,5 +197,6 @@ Verified in simulator and generic iOS builds:
 - File read/write tools work in the AgentKit workspace.
 - Hermes memory, context, and soul can persist under Application Support.
 - The optional local MLX add-on runs as an offline proof of concept, though the small 2B model is weak at tool use.
+- The optional Apple Foundation Models add-on can run Hermes chat and basic file-tool loops on device, but still needs a more curated agent/tool layer.
 
 AgentKit is still a proof of concept. Hermes is the only supported agent implementation today, and some desktop-style tools are intentionally unavailable on iOS.

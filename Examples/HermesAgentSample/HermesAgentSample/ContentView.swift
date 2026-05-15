@@ -1,4 +1,5 @@
 import AgentKit
+import AgentKitFoundationModels
 import AgentKitMLX
 import SwiftUI
 
@@ -223,6 +224,26 @@ struct ContentView: View {
             )
         }
 
+        if usesFoundationModels {
+            if #available(iOS 26.0, *) {
+                return .foundationModels(
+                    maxTokens: mlxMaxTokens,
+                    temperature: mlxTemperature,
+                    enableSoul: enableSoul,
+                    enableContext: enableContext,
+                    enableMemory: enableMemory
+                )
+            }
+            return .openAI(
+                apiKey: apiKey,
+                model: model,
+                baseURL: baseURL,
+                enableSoul: enableSoul,
+                enableContext: enableContext,
+                enableMemory: enableMemory
+            )
+        }
+
         return .openAI(
             apiKey: apiKey,
             model: model,
@@ -237,7 +258,22 @@ struct ContentView: View {
         provider == "mlx"
     }
 
+    private var usesFoundationModels: Bool {
+        provider == "foundation"
+    }
+
     nonisolated private static func makeAgent(configuration: HermesAgentConfiguration) throws -> HermesAgent {
+        if configuration.baseURL.hasPrefix("hermes-foundation-models://") {
+            if #available(iOS 26.0, *) {
+                return try HermesAgent(
+                    configuration: configuration,
+                    sourceURL: HermesAgent.bundledSourceURL(),
+                    executionMode: .inProcess,
+                    modelProvider: AgentKitFoundationModelsProvider()
+                )
+            }
+        }
+
         if configuration.baseURL.hasPrefix("hermes-local-mlx://") {
             return try HermesAgent(
                 configuration: configuration,

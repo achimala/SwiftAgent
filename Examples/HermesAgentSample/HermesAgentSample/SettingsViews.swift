@@ -1,4 +1,5 @@
 import AgentKit
+import AgentKitFoundationModels
 import AgentKitMLX
 import SwiftUI
 
@@ -31,6 +32,7 @@ struct SettingsView: View {
                     Picker("Provider", selection: $provider) {
                         Text("Hermes").tag("hermes")
                         Text("Offline MLX").tag("mlx")
+                        Text("Apple").tag("foundation")
                     }
                     .pickerStyle(.segmented)
                 }
@@ -49,13 +51,17 @@ struct SettingsView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
-                .disabled(provider == "mlx")
+                .disabled(provider != "hermes")
 
-                if provider == "mlx" {
-                    Section("Offline MLX") {
-                        TextField("Model ID", text: $mlxModel)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
+                if provider == "mlx" || provider == "foundation" {
+                    Section(provider == "foundation" ? "Apple On-Device" : "Offline MLX") {
+                        if provider == "mlx" {
+                            TextField("Model ID", text: $mlxModel)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                        } else {
+                            LabeledContent("Model", value: "Foundation Models")
+                        }
 
                         Stepper("Max tokens: \(mlxMaxTokens)", value: $mlxMaxTokens, in: 16...2048, step: 16)
 

@@ -1,4 +1,5 @@
 import AgentKit
+import AgentKitFoundationModels
 import AgentKitMLX
 import Foundation
 
@@ -10,6 +11,8 @@ enum SampleSmokeRunners {
         await HermesMLXSessionCycleSmokeRunner.runIfRequested()
         await HermesMLXStressSmokeRunner.runIfRequested()
         await HermesMLXToolSmokeRunner.runIfRequested()
+        await HermesFoundationModelsSmokeRunner.runIfRequested()
+        await HermesFoundationModelsToolSmokeRunner.runIfRequested()
         await AgentKitISHSmokeRunner.runIfRequested()
         await HermesExtensionProbeSmokeRunner.runIfRequested()
     }
@@ -276,6 +279,90 @@ private enum LocalMLXAgentFactory {
             executionMode: .inProcess,
             modelProvider: AgentKitMLXModelProvider()
         )
+    }
+}
+
+private enum HermesFoundationModelsSmokeRunner {
+    private static let argument = "--hermes-foundation-models-smoke"
+
+    static func runIfRequested() async {
+        guard ProcessInfo.processInfo.arguments.contains(argument) else { return }
+
+        let recorder = SmokeRecorder(filename: "hermes-foundation-models-smoke.log")
+        await recorder.write("start")
+
+        do {
+            guard #available(iOS 26.0, *) else {
+                await recorder.write("done skipped=requires-ios-26")
+                return
+            }
+
+            let agent = try HermesAgent(
+                configuration: .foundationModels(
+                    maxTokens: 160,
+                    temperature: 0.1,
+                    enableSoul: false,
+                    enableContext: false,
+                    enableMemory: false
+                ),
+                sourceURL: HermesAgent.bundledSourceURL(),
+                executionMode: .inProcess,
+                modelProvider: AgentKitFoundationModelsProvider()
+            )
+            _ = try agent.newSession()
+            let result = try agent.send("In one short sentence, say whether Hermes is running through Apple Foundation Models.") { event in
+                Task {
+                    await recorder.write("event kind=\(event.kind) payload=\(event.payload)")
+                }
+            }
+            await recorder.write("result \(result)")
+            await recorder.write("done ok")
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            await recorder.write("done error=\(message)")
+        }
+    }
+}
+
+private enum HermesFoundationModelsToolSmokeRunner {
+    private static let argument = "--hermes-foundation-models-tool-smoke"
+
+    static func runIfRequested() async {
+        guard ProcessInfo.processInfo.arguments.contains(argument) else { return }
+
+        let recorder = SmokeRecorder(filename: "hermes-foundation-models-tool-smoke.log")
+        await recorder.write("start")
+
+        do {
+            guard #available(iOS 26.0, *) else {
+                await recorder.write("done skipped=requires-ios-26")
+                return
+            }
+
+            let agent = try HermesAgent(
+                configuration: .foundationModels(
+                    maxTokens: 256,
+                    temperature: 0,
+                    enableSoul: false,
+                    enableContext: false,
+                    enableMemory: false
+                ),
+                sourceURL: HermesAgent.bundledSourceURL(),
+                executionMode: .inProcess,
+                modelProvider: AgentKitFoundationModelsProvider()
+            )
+            _ = try agent.newSession()
+            let result = try agent.send("Use the file tools to create apple-foundation-smoke.txt containing exactly apple foundation tool smoke, then read it back and answer with its contents.") { event in
+                Task {
+                    await recorder.write("event kind=\(event.kind) payload=\(event.payload)")
+                }
+            }
+            await recorder.write("result \(result)")
+            await recorder.write("done ok")
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            await recorder.write("done error=\(message)")
+        }
     }
 }
 

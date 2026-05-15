@@ -16,6 +16,7 @@
 		9B2E3EF31816D6F66C2BD1D9 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7A75ED586E43ECC7F93E0D /* SettingsViews.swift */; };
 		A480F99CD172815254D90351 /* AgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1A349145F95AC966278355F8 /* AgentKit */; };
 		B85D7B0E2450F1BDF3FA8EC8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */; };
+		BC88D1845DDC34B97814FA44 /* AgentKitFoundationModels in Frameworks */ = {isa = PBXBuildFile; productRef = 4096DC84E163B705949CE99D /* AgentKitFoundationModels */; };
 		BEF66DF1BF0EAD3C8236C276 /* AgentKitMLX in Frameworks */ = {isa = PBXBuildFile; productRef = C295105FE19060BFA5497ED2 /* AgentKitMLX */; };
 		D88E71BB84E288D64941B032 /* HermesAgentWorker.appex in Embed ExtensionKit Extensions */ = {isa = PBXBuildFile; fileRef = D1EE402D48618F7BA41DB297 /* HermesAgentWorker.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E0877EEBB28FA5FFB23EC500 /* HermesAgentSampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */; };
@@ -50,6 +51,7 @@
 /* Begin PBXFileReference section */
 		00DC5192B4858352258C4AF9 /* AgentKitMLX */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentKitMLX; path = ../../Packages/AgentKitMLX; sourceTree = SOURCE_ROOT; };
 		19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		2EF10E8A41CCBA6B50C0D9D1 /* AgentKitFoundationModels */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentKitFoundationModels; path = ../../Packages/AgentKitFoundationModels; sourceTree = SOURCE_ROOT; };
 		3113797EFC3A21F2B1AAAF05 /* AgentKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentKit; path = ../..; sourceTree = SOURCE_ROOT; };
 		50E09752BE18289D4EBC117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		544419CD6953902644C5D8B6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -74,6 +76,7 @@
 			files = (
 				88B1F5EB1951FF117B007686 /* AgentKit in Frameworks */,
 				BEF66DF1BF0EAD3C8236C276 /* AgentKitMLX in Frameworks */,
+				BC88D1845DDC34B97814FA44 /* AgentKitFoundationModels in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -147,6 +150,7 @@
 			isa = PBXGroup;
 			children = (
 				3113797EFC3A21F2B1AAAF05 /* AgentKit */,
+				2EF10E8A41CCBA6B50C0D9D1 /* AgentKitFoundationModels */,
 				00DC5192B4858352258C4AF9 /* AgentKitMLX */,
 			);
 			name = Packages;
@@ -194,6 +198,7 @@
 			packageProductDependencies = (
 				2D3754D554308A3A0A091CD8 /* AgentKit */,
 				C295105FE19060BFA5497ED2 /* AgentKitMLX */,
+				4096DC84E163B705949CE99D /* AgentKitFoundationModels */,
 			);
 			productName = HermesAgentSample;
 			productReference = 93A8FEFCE0E20CC1277EAC99 /* HermesAgentSample.app */;
@@ -229,6 +234,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				280DA97F67D82E1DEBF4515F /* XCLocalSwiftPackageReference "../.." */,
+				EC761248AFCCBBCEBAAB257B /* XCLocalSwiftPackageReference "../../Packages/AgentKitFoundationModels" */,
 				3E3D9EC1F7316679FF358F2E /* XCLocalSwiftPackageReference "../../Packages/AgentKitMLX" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -571,6 +577,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../Packages/AgentKitMLX;
 		};
+		EC761248AFCCBBCEBAAB257B /* XCLocalSwiftPackageReference "../../Packages/AgentKitFoundationModels" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../Packages/AgentKitFoundationModels;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -581,6 +591,10 @@
 		2D3754D554308A3A0A091CD8 /* AgentKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AgentKit;
+		};
+		4096DC84E163B705949CE99D /* AgentKitFoundationModels */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AgentKitFoundationModels;
 		};
 		C295105FE19060BFA5497ED2 /* AgentKitMLX */ = {
 			isa = XCSwiftPackageProductDependency;
