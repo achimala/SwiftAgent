@@ -182,8 +182,21 @@ public final class HermesAgentRuntime: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
+        let start = Date()
+        func emitTiming(_ label: String, detail: String? = nil) {
+            onEvent(
+                HermesChatEvent(
+                    kind: "timing",
+                    payload: Self.timingPayload(label: label, start: start, detail: detail)
+                )
+            )
+        }
+
+        emitTiming("swift_chat_start", detail: configuration.model)
         _ = try prepareHermes(hermesSourcePath: hermesSourcePath)
+        emitTiming("swift_prepare_done")
         _ = try configureHermes(configuration)
+        emitTiming("swift_configure_done")
 
         let box = HermesStreamCallbackBox(callback: onEvent)
         let opaqueBox = Unmanaged.passRetained(box).toOpaque()
@@ -210,8 +223,25 @@ public final class HermesAgentRuntime: @unchecked Sendable {
         ) else {
             throw HermesAgentKitError.python(String(cString: error))
         }
+        emitTiming("swift_python_chat_returned")
         defer { HermesPython_FreeCString(result) }
         return String(cString: result)
+    }
+
+    private static func timingPayload(label: String, start: Date, detail: String? = nil) -> String {
+        var payload: [String: Any] = [
+            "label": label,
+            "elapsed_ms": Date().timeIntervalSince(start) * 1000,
+        ]
+        if let detail, !detail.isEmpty {
+            payload["detail"] = detail
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let text = String(data: data, encoding: .utf8)
+        else {
+            return "{\"label\":\"\(label)\",\"elapsed_ms\":0}"
+        }
+        return text
     }
 
     private func ensureInitialized() throws {

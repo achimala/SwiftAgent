@@ -47,6 +47,18 @@ private struct ToolEvent: Decodable {
     }
 }
 
+private struct TimingEvent: Decodable {
+    let label: String
+    let elapsedMs: Double
+    let detail: String?
+
+    enum CodingKeys: String, CodingKey {
+        case label
+        case elapsedMs = "elapsed_ms"
+        case detail
+    }
+}
+
 private enum JSONValue: Decodable, Equatable, CustomStringConvertible {
     case string(String)
     case number(Double)
@@ -127,6 +139,7 @@ struct ContentView: View {
     ]
     @State private var isRunning = false
     @State private var showingSettings = false
+    @State private var timingEvents: [UUID: [TimingEvent]] = [:]
     @FocusState private var draftFocused: Bool
 
     var body: some View {
@@ -300,6 +313,7 @@ struct ContentView: View {
         draftFocused = false
         append(.user, title: "You", body: userMessage)
         let assistantID = append(.assistant, title: "Hermes", body: "", isStreaming: true)
+        timingEvents[assistantID] = []
         let config = configuration
         isRunning = true
 
@@ -317,6 +331,7 @@ struct ContentView: View {
 
                 await MainActor.run {
                     finishAssistant(assistantID, fallback: finalResponse(from: final))
+                    appendTimingSummary(for: assistantID)
                     Self.writeProbeOutput(transcriptText)
                     isRunning = false
                 }
@@ -324,6 +339,7 @@ struct ContentView: View {
                 await MainActor.run {
                     finishAssistant(assistantID, fallback: "")
                     append(.error, title: "Error", body: String(describing: error))
+                    appendTimingSummary(for: assistantID)
                     Self.writeProbeOutput(transcriptText)
                     isRunning = false
                 }
@@ -368,6 +384,8 @@ struct ContentView: View {
             moveEmptyAssistantToEnd(assistantID)
         case "tool_progress":
             break
+        case "timing":
+            recordTiming(event.payload, assistantID: assistantID)
         case "done":
             stopAssistantSpinner(assistantID)
         case "error":
@@ -427,6 +445,35 @@ struct ContentView: View {
             toolSucceeded: ok
         )
         entries.append(entry)
+    }
+
+    private func recordTiming(_ payload: String, assistantID: UUID) {
+        guard let data = payload.data(using: .utf8),
+              let timing = try? JSONDecoder().decode(TimingEvent.self, from: data)
+        else { return }
+        timingEvents[assistantID, default: []].append(timing)
+    }
+
+    private func appendTimingSummary(for assistantID: UUID) {
+        guard let timings = timingEvents.removeValue(forKey: assistantID), !timings.isEmpty else { return }
+        let body = timings
+            .map { timing in
+                let detail = timing.detail.map { " \($0)" } ?? ""
+                return "\(formatTimingLabel(timing.label)) \(formatElapsed(timing.elapsedMs))\(detail)"
+            }
+            .joined(separator: "\n")
+        append(.debug, title: "Timing", body: body)
+    }
+
+    private func formatTimingLabel(_ label: String) -> String {
+        label.replacingOccurrences(of: "_", with: " ")
+    }
+
+    private func formatElapsed(_ ms: Double) -> String {
+        if ms >= 1000 {
+            return String(format: "%.2fs", ms / 1000)
+        }
+        return "\(Int(ms.rounded()))ms"
     }
 
     private func appendToAssistant(_ id: UUID, text: String) {

@@ -4,6 +4,7 @@ import os
 import platform
 import shlex
 import sys
+import time
 import traceback
 import uuid
 
@@ -366,9 +367,37 @@ def hermes_tool_probe(hermes_source_path=None):
 
 def hermes_chat(message):
     try:
+        started = time.monotonic()
+        first_events = set()
+
+        def elapsed_ms():
+            return round((time.monotonic() - started) * 1000, 1)
+
+        def emit_timing(label, detail=None):
+            payload = {
+                "label": label,
+                "elapsed_ms": elapsed_ms(),
+            }
+            if detail:
+                payload["detail"] = str(detail)
+            try:
+                _emit_stream("timing", json.dumps(payload, ensure_ascii=False))
+            except Exception:
+                _emit_stream("timing", str(payload))
+
+        def emit_first(label, detail=None):
+            if label in first_events:
+                return
+            first_events.add(label)
+            emit_timing(label, detail)
+
+        emit_timing("python_chat_start")
         agent = _get_agent()
+        emit_timing("python_agent_ready", getattr(agent, "model", None))
 
         def on_delta(delta):
+            if delta:
+                emit_first("first_text_delta")
             _emit_stream("delta", "" if delta is None else delta)
 
         def emit_json(event, payload):
@@ -378,6 +407,8 @@ def hermes_chat(message):
                 _emit_stream(event, str(payload))
 
         def on_tool_start(tool_call_id, name, args):
+            emit_first("first_tool_start", name)
+            emit_timing("tool_start", name)
             emit_json(
                 "tool_start",
                 {
@@ -388,6 +419,7 @@ def hermes_chat(message):
             )
 
         def on_tool_complete(tool_call_id, name, args, result):
+            emit_timing("tool_complete", name)
             result_text = result if isinstance(result, str) else json.dumps(result, ensure_ascii=False)
             emit_json(
                 "tool_complete",
@@ -412,19 +444,29 @@ def hermes_chat(message):
             )
 
         def on_tool_gen(name):
+            emit_first("first_tool_generation", name)
             emit_json("tool_gen", {"name": name})
 
         def on_interim(text, already_streamed=False):
+            if text:
+                emit_first("first_interim_assistant")
             if not already_streamed:
                 _emit_stream("interim", text)
+
+        def on_reasoning(text):
+            if text:
+                emit_first("first_reasoning_delta", f"{len(text)} chars")
 
         agent.tool_start_callback = on_tool_start
         agent.tool_complete_callback = on_tool_complete
         agent.tool_progress_callback = on_tool_progress
         agent.tool_gen_callback = on_tool_gen
         agent.interim_assistant_callback = on_interim
+        agent.reasoning_callback = on_reasoning
 
+        emit_timing("run_conversation_start")
         result = agent.run_conversation(message, stream_callback=on_delta)
+        emit_timing("run_conversation_returned")
         _emit_stream("done", "")
         return json.dumps(
             {
