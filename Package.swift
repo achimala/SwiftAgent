@@ -3,20 +3,29 @@
 import PackageDescription
 
 let package = Package(
-    name: "HermesAgentKit",
+    name: "AgentKit",
     platforms: [
         .iOS(.v17),
     ],
     products: [
         .library(
-            name: "HermesAgentKit",
-            targets: ["HermesAgentKit"]
+            name: "AgentKit",
+            targets: ["AgentKit"]
         ),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", .upToNextMajor(from: "3.31.3")),
+        .package(url: "https://github.com/huggingface/swift-huggingface", from: "0.9.0"),
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
     ],
     targets: [
         .binaryTarget(
             name: "Python",
             path: "Vendor/Python.xcframework"
+        ),
+        .binaryTarget(
+            name: "AgentKitISH",
+            path: "Vendor/AgentKitISH.xcframework"
         ),
         .binaryTarget(
             name: "ios_system",
@@ -59,9 +68,10 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         .target(
-            name: "HermesAgentKit",
+            name: "AgentKit",
             dependencies: [
                 "CHermesShell",
+                "AgentKitISH",
                 "CHermesPython",
                 "awk",
                 "dash",
@@ -69,11 +79,23 @@ let package = Package(
                 "ios_system",
                 "shell",
                 "text",
+                .product(name: "HuggingFace", package: "swift-huggingface"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
             ],
             resources: [
                 .copy("Resources/Python"),
+                .copy("Resources/iSH"),
                 .copy("Resources/Shell"),
+            ],
+            linkerSettings: [
+                .linkedLibrary("sqlite3"),
             ]
+        ),
+        .testTarget(
+            name: "AgentKitTests",
+            dependencies: ["AgentKit"]
         ),
     ]
 )

@@ -1,0 +1,10 @@
+alpine-baselayout
+alpine-keys
+alpine-release
+apk-tools
+busybox
+git
+jq
+musl-utils
+python3
+ripgrep

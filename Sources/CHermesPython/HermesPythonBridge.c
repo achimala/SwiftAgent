@@ -14,6 +14,8 @@ static HermesPython_StreamCallback g_stream_callback = NULL;
 static void *g_stream_context = NULL;
 static HermesPython_ShellCallback g_shell_callback = NULL;
 static void *g_shell_context = NULL;
+static HermesPython_LocalLLMCallback g_local_llm_callback = NULL;
+static void *g_local_llm_context = NULL;
 
 static void set_error(char *buffer, int capacity, const char *message) {
     if (buffer == NULL || capacity <= 0) {
@@ -322,7 +324,7 @@ int python3_main(int argc, char **argv) {
             status = run_python_with_capture(run_python_file_context, &context);
         }
     } else {
-        fprintf(command_stderr(), "python3: interactive mode is not available in HermesAgentKit\n");
+        fprintf(command_stderr(), "python3: interactive mode is not available in AgentKit\n");
         status = 1;
     }
 
@@ -481,16 +483,43 @@ static PyObject *agentkit_run_shell(PyObject *self, PyObject *args) {
     return result;
 }
 
+static PyObject *agentkit_local_llm_chat(PyObject *self, PyObject *args) {
+    const char *request_json = NULL;
+
+    if (!PyArg_ParseTuple(args, "s", &request_json)) {
+        return NULL;
+    }
+
+    if (g_local_llm_callback == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "No native local LLM callback is registered.");
+        return NULL;
+    }
+
+    char *response_json = NULL;
+    Py_BEGIN_ALLOW_THREADS
+    response_json = g_local_llm_callback(request_json, g_local_llm_context);
+    Py_END_ALLOW_THREADS
+    if (response_json == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Native local LLM callback failed.");
+        return NULL;
+    }
+
+    PyObject *result = PyUnicode_FromString(response_json);
+    free(response_json);
+    return result;
+}
+
 static PyMethodDef AgentKitMethods[] = {
     {"emit_stream", agentkit_emit_stream, METH_VARARGS, "Emit a Hermes stream event to the native host."},
     {"run_shell", agentkit_run_shell, METH_VARARGS, "Run a shell command through the native host."},
+    {"local_llm_chat", agentkit_local_llm_chat, METH_VARARGS, "Run a local LLM chat completion through the native host."},
     {NULL, NULL, 0, NULL}
 };
 
 static struct PyModuleDef AgentKitModule = {
     PyModuleDef_HEAD_INIT,
     "_hermes_agentkit",
-    "Native callbacks for HermesAgentKit.",
+    "Native callbacks for AgentKit.",
     -1,
     AgentKitMethods
 };
@@ -650,6 +679,11 @@ int HermesPython_IsInitialized(void) {
 void HermesPython_RegisterShellCallback(HermesPython_ShellCallback callback, void *user_context) {
     g_shell_callback = callback;
     g_shell_context = user_context;
+}
+
+void HermesPython_RegisterLocalLLMCallback(HermesPython_LocalLLMCallback callback, void *user_context) {
+    g_local_llm_callback = callback;
+    g_local_llm_context = user_context;
 }
 
 char *HermesPython_Evaluate(const char *code, char *error, int error_capacity) {

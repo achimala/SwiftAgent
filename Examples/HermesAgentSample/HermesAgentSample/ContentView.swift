@@ -1,4 +1,4 @@
-import HermesAgentKit
+import AgentKit
 import SwiftUI
 
 private struct ChatEntry: Identifiable, Equatable {
@@ -139,9 +139,13 @@ private enum JSONValue: Decodable, Equatable, CustomStringConvertible {
 }
 
 struct ContentView: View {
+    @AppStorage("hermes.provider") private var provider = "hermes"
     @AppStorage("hermes.baseURL") private var baseURL = "https://api.openai.com/v1"
     @AppStorage("hermes.apiKey") private var apiKey = ""
     @AppStorage("hermes.model") private var model = "gpt-4.1-mini"
+    @AppStorage("hermes.mlxModel") private var mlxModel = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit
+    @AppStorage("hermes.mlxMaxTokens") private var mlxMaxTokens = 128
+    @AppStorage("hermes.mlxTemperature") private var mlxTemperature = 0.2
     @AppStorage("hermes.enableSoul") private var enableSoul = true
     @AppStorage("hermes.enableContext") private var enableContext = true
     @AppStorage("hermes.enableMemory") private var enableMemory = true
@@ -203,9 +207,13 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView(
+                    provider: $provider,
                     baseURL: $baseURL,
                     apiKey: $apiKey,
                     model: $model,
+                    mlxModel: $mlxModel,
+                    mlxMaxTokens: $mlxMaxTokens,
+                    mlxTemperature: $mlxTemperature,
                     enableSoul: $enableSoul,
                     enableContext: $enableContext,
                     enableMemory: $enableMemory,
@@ -285,21 +293,30 @@ struct ContentView: View {
         .background(.bar)
     }
 
-    private var configuration: HermesChatConfiguration {
-        HermesChatConfiguration(
-            baseURL: baseURL,
+    private var agentConfiguration: HermesAgentConfiguration {
+        if usesLocalMLX {
+            return .localMLX(
+                model: mlxModel,
+                maxTokens: mlxMaxTokens,
+                temperature: mlxTemperature,
+                enableSoul: enableSoul,
+                enableContext: enableContext,
+                enableMemory: enableMemory
+            )
+        }
+
+        return .openAI(
             apiKey: apiKey,
             model: model,
+            baseURL: baseURL,
             enableSoul: enableSoul,
             enableContext: enableContext,
             enableMemory: enableMemory
         )
     }
 
-    private var hermesPath: URL? {
-        Bundle.main.resourceURL?
-            .appendingPathComponent("PythonApp", isDirectory: true)
-            .appendingPathComponent("hermes", isDirectory: true)
+    private var usesLocalMLX: Bool {
+        provider == "mlx"
     }
 
     private static func welcomeEntries() -> [ChatEntry] {
@@ -314,10 +331,10 @@ struct ContentView: View {
     }
 
     private func loadCurrentSession() {
-        guard let hermesPath else { return }
+        let configuration = agentConfiguration
         Task.detached {
             do {
-                let state = try HermesAgentRuntime.shared.sessionState(hermesSourcePath: hermesPath)
+                let state = try HermesAgent(configuration: configuration).sessionState()
                 await MainActor.run {
                     applySessionState(state, renderTranscript: true)
                 }
@@ -330,10 +347,10 @@ struct ContentView: View {
     }
 
     private func refreshSessions() {
-        guard let hermesPath else { return }
+        let configuration = agentConfiguration
         Task.detached {
             do {
-                let state = try HermesAgentRuntime.shared.sessionState(hermesSourcePath: hermesPath)
+                let state = try HermesAgent(configuration: configuration).sessionState()
                 await MainActor.run {
                     applySessionState(state, renderTranscript: false)
                 }
@@ -346,11 +363,11 @@ struct ContentView: View {
     }
 
     private func loadSession(_ sessionID: String) {
-        guard let hermesPath else { return }
+        let configuration = agentConfiguration
         isRunning = true
         Task.detached {
             do {
-                let state = try HermesAgentRuntime.shared.loadSession(sessionID, hermesSourcePath: hermesPath)
+                let state = try HermesAgent(configuration: configuration).loadSession(sessionID)
                 await MainActor.run {
                     applySessionState(state, renderTranscript: true)
                     isRunning = false
@@ -365,11 +382,11 @@ struct ContentView: View {
     }
 
     private func createNewSession() {
-        guard let hermesPath else { return }
+        let configuration = agentConfiguration
         isRunning = true
         Task.detached {
             do {
-                let state = try HermesAgentRuntime.shared.newSession(hermesSourcePath: hermesPath)
+                let state = try HermesAgent(configuration: configuration).newSession()
                 await MainActor.run {
                     applySessionState(state, renderTranscript: true)
                     draft = ""
@@ -495,15 +512,16 @@ struct ContentView: View {
     }
 
     private func runProbe() {
-        let path = hermesPath
+        let configuration = agentConfiguration
         isRunning = true
         append(.status, title: "Probe", body: "Starting embedded Python and Hermes...")
 
         Task.detached {
             let text: String
             do {
-                let result = try HermesAgentRuntime.shared.probe(hermesSourcePath: path)
-                let toolProbe = try HermesAgentRuntime.shared.toolProbe(hermesSourcePath: path)
+                let agent = try HermesAgent(configuration: configuration)
+                let result = try agent.probe()
+                let toolProbe = try agent.toolProbe()
                 text = """
                 PYTHON
                 \(result.python)
@@ -534,7 +552,7 @@ struct ContentView: View {
         Task.detached {
             let text: String
             do {
-                text = try HermesShellRuntime.shared.smokeTest()
+                text = try AgentKitISHShellEnvironment.shared.smokeTest()
             } catch {
                 text = String(describing: error)
             }
@@ -549,11 +567,6 @@ struct ContentView: View {
     }
 
     private func sendMessage() {
-        guard let hermesPath else {
-            append(.error, title: "Missing Hermes", body: "Bundled Hermes source was not found.")
-            return
-        }
-
         let userMessage = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !userMessage.isEmpty else { return }
 
@@ -562,16 +575,13 @@ struct ContentView: View {
         append(.user, title: "You", body: userMessage)
         let assistantID = append(.assistant, title: "Hermes", body: "", isStreaming: true)
         timingEvents[assistantID] = []
-        let config = configuration
+        let config = agentConfiguration
         isRunning = true
 
         Task.detached {
             do {
-                let final = try HermesAgentRuntime.shared.chat(
-                    message: userMessage,
-                    configuration: config,
-                    hermesSourcePath: hermesPath
-                ) { event in
+                let agent = try HermesAgent(configuration: config)
+                let final = try agent.send(userMessage) { event in
                     Task { @MainActor in
                         handle(event: event, assistantID: assistantID)
                     }
@@ -590,7 +600,7 @@ struct ContentView: View {
                 await MainActor.run {
                     finishAssistant(assistantID, fallback: "")
                     stopReasoningSpinner(for: assistantID)
-                    append(.error, title: "Error", body: String(describing: error))
+                    append(.error, title: "Error", body: Self.displayText(for: error))
                     appendTimingSummary(for: assistantID)
                     Self.writeProbeOutput(transcriptText)
                     isRunning = false
@@ -612,7 +622,7 @@ struct ContentView: View {
     }
 
     @MainActor
-    private func handle(event: HermesChatEvent, assistantID: UUID) {
+    private func handle(event: AgentKitEvent, assistantID: UUID) {
         switch event.kind {
         case "delta":
             endActiveReasoningChunk(for: assistantID)
@@ -1021,6 +1031,13 @@ struct ContentView: View {
         let index = text.index(text.startIndex, offsetBy: limit)
         return String(text[..<index]) + "\n\n... truncated in UI; full output was written to hermes-probe-output.txt"
     }
+
+    nonisolated private static func displayText(for error: Error) -> String {
+        if let description = (error as? LocalizedError)?.errorDescription, !description.isEmpty {
+            return description
+        }
+        return error.localizedDescription
+    }
 }
 
 private struct ChatRow: View {
@@ -1229,9 +1246,13 @@ private struct ChatRow: View {
 }
 
 private struct SettingsView: View {
+    @Binding var provider: String
     @Binding var baseURL: String
     @Binding var apiKey: String
     @Binding var model: String
+    @Binding var mlxModel: String
+    @Binding var mlxMaxTokens: Int
+    @Binding var mlxTemperature: Double
     @Binding var enableSoul: Bool
     @Binding var enableContext: Bool
     @Binding var enableMemory: Bool
@@ -1242,16 +1263,24 @@ private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     private var hermesHome: URL? {
-        try? HermesAgentRuntime.defaultHermesHome()
+        try? HermesAgent.defaultHome()
     }
 
     private var workspace: URL? {
-        try? HermesAgentRuntime.defaultWorkspace()
+        try? HermesAgent.defaultWorkspace()
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Provider") {
+                    Picker("Provider", selection: $provider) {
+                        Text("Hermes").tag("hermes")
+                        Text("Offline MLX").tag("mlx")
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section("Connection") {
                     TextField("Base URL", text: $baseURL)
                         .textInputAutocapitalization(.never)
@@ -1265,6 +1294,26 @@ private struct SettingsView: View {
                     TextField("Model", text: $model)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                }
+                .disabled(provider == "mlx")
+
+                if provider == "mlx" {
+                    Section("Offline MLX") {
+                        TextField("Model ID", text: $mlxModel)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+
+                        Stepper("Max tokens: \(mlxMaxTokens)", value: $mlxMaxTokens, in: 16...2048, step: 16)
+
+                        HStack {
+                            Text("Temperature")
+                            Slider(value: $mlxTemperature, in: 0...1, step: 0.05)
+                            Text(mlxTemperature, format: .number.precision(.fractionLength(2)))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 44, alignment: .trailing)
+                        }
+                    }
                 }
 
                 Section("Agent State") {

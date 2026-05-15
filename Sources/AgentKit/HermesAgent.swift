@@ -1,0 +1,201 @@
+import Foundation
+import Darwin
+
+public struct HermesAgentConfiguration: Sendable {
+    public var baseURL: String
+    public var apiKey: String
+    public var model: String
+    public var enableSoul: Bool
+    public var enableContext: Bool
+    public var enableMemory: Bool
+    public var localMLXMaxTokens: Int?
+    public var localMLXTemperature: Double?
+
+    public init(
+        baseURL: String = "https://api.openai.com/v1",
+        apiKey: String,
+        model: String,
+        enableSoul: Bool = true,
+        enableContext: Bool = true,
+        enableMemory: Bool = true,
+        localMLXMaxTokens: Int? = nil,
+        localMLXTemperature: Double? = nil
+    ) {
+        self.baseURL = baseURL
+        self.apiKey = apiKey
+        self.model = model
+        self.enableSoul = enableSoul
+        self.enableContext = enableContext
+        self.enableMemory = enableMemory
+        self.localMLXMaxTokens = localMLXMaxTokens
+        self.localMLXTemperature = localMLXTemperature
+    }
+
+    public static func openAI(
+        apiKey: String,
+        model: String = "gpt-4.1-mini",
+        baseURL: String = "https://api.openai.com/v1",
+        enableSoul: Bool = true,
+        enableContext: Bool = true,
+        enableMemory: Bool = true
+    ) -> HermesAgentConfiguration {
+        HermesAgentConfiguration(
+            baseURL: baseURL,
+            apiKey: apiKey,
+            model: model,
+            enableSoul: enableSoul,
+            enableContext: enableContext,
+            enableMemory: enableMemory
+        )
+    }
+
+    public static func localMLX(
+        model: String = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit,
+        maxTokens: Int = 128,
+        temperature: Double = 0.2,
+        enableSoul: Bool = true,
+        enableContext: Bool = true,
+        enableMemory: Bool = true
+    ) -> HermesAgentConfiguration {
+        HermesAgentConfiguration(
+            baseURL: "hermes-local-mlx://chat",
+            apiKey: "local-mlx",
+            model: model,
+            enableSoul: enableSoul,
+            enableContext: enableContext,
+            enableMemory: enableMemory,
+            localMLXMaxTokens: maxTokens,
+            localMLXTemperature: temperature
+        )
+    }
+
+    var runtimeConfiguration: HermesChatConfiguration {
+        HermesChatConfiguration(
+            baseURL: baseURL,
+            apiKey: apiKey,
+            model: model,
+            enableSoul: enableSoul,
+            enableContext: enableContext,
+            enableMemory: enableMemory
+        )
+    }
+
+    func applyRuntimeEnvironment() {
+        guard baseURL == "hermes-local-mlx://chat" else { return }
+
+        if let localMLXMaxTokens {
+            setenv("HERMES_LOCAL_MLX_MAX_TOKENS", String(localMLXMaxTokens), 1)
+        }
+        if let localMLXTemperature {
+            setenv("HERMES_LOCAL_MLX_TEMPERATURE", String(localMLXTemperature), 1)
+        }
+    }
+}
+
+public final class HermesAgent: @unchecked Sendable {
+    public let sourceURL: URL
+    public var configuration: HermesAgentConfiguration
+
+    private let runtime: HermesAgentRuntime
+
+    public init(
+        configuration: HermesAgentConfiguration,
+        sourceURL: URL,
+        runtime: HermesAgentRuntime = .shared,
+        shellEnvironment: (any AgentKitShellEnvironment)? = nil,
+        modelProvider: (any AgentKitModelProvider)? = nil
+    ) {
+        self.configuration = configuration
+        self.sourceURL = sourceURL
+        self.runtime = runtime
+
+        if let shellEnvironment {
+            runtime.setShellEnvironment(shellEnvironment)
+        }
+        if let modelProvider {
+            runtime.setModelProvider(modelProvider)
+        }
+    }
+
+    public convenience init(
+        configuration: HermesAgentConfiguration,
+        bundle: Bundle = .main,
+        bundledSourcePath: String = "PythonApp/hermes",
+        runtime: HermesAgentRuntime = .shared,
+        shellEnvironment: (any AgentKitShellEnvironment)? = nil,
+        modelProvider: (any AgentKitModelProvider)? = nil
+    ) throws {
+        try self.init(
+            configuration: configuration,
+            sourceURL: Self.bundledSourceURL(in: bundle, path: bundledSourcePath),
+            runtime: runtime,
+            shellEnvironment: shellEnvironment,
+            modelProvider: modelProvider
+        )
+    }
+
+    public static func bundledSourceURL(
+        in bundle: Bundle = .main,
+        path: String = "PythonApp/hermes"
+    ) throws -> URL {
+        guard let resourceURL = bundle.resourceURL else {
+            throw HermesAgentError.python("Bundle resources are not available.")
+        }
+
+        let url = path
+            .split(separator: "/")
+            .reduce(resourceURL) { partial, component in
+                partial.appendingPathComponent(String(component), isDirectory: true)
+            }
+
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw HermesAgentError.missingHermesSource(url)
+        }
+        return url
+    }
+
+    public static func defaultHome() throws -> URL {
+        try HermesAgentRuntime.defaultHermesHome()
+    }
+
+    public static func defaultWorkspace() throws -> URL {
+        try HermesAgentRuntime.defaultWorkspace()
+    }
+
+    public func prepare() throws -> String {
+        try runtime.prepareHermes(hermesSourcePath: sourceURL)
+    }
+
+    public func probe() throws -> HermesProbeResult {
+        try runtime.probe(hermesSourcePath: sourceURL)
+    }
+
+    public func toolProbe() throws -> String {
+        try runtime.toolProbe(hermesSourcePath: sourceURL)
+    }
+
+    public func send(
+        _ message: String,
+        onEvent: @escaping @Sendable (AgentKitEvent) -> Void = { _ in }
+    ) throws -> String {
+        configuration.applyRuntimeEnvironment()
+        return try runtime.chat(
+            message: message,
+            configuration: configuration.runtimeConfiguration,
+            hermesSourcePath: sourceURL,
+            onEvent: onEvent
+        )
+    }
+
+    public func sessionState() throws -> HermesSessionState {
+        try runtime.sessionState(hermesSourcePath: sourceURL)
+    }
+
+    public func loadSession(_ sessionID: String) throws -> HermesSessionState {
+        try runtime.loadSession(sessionID, hermesSourcePath: sourceURL)
+    }
+
+    public func newSession() throws -> HermesSessionState {
+        try runtime.newSession(hermesSourcePath: sourceURL)
+    }
+}

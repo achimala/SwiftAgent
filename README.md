@@ -1,16 +1,71 @@
-# HermesAgentKit
+# AgentKit
 
-HermesAgentKit is a proof-of-concept Swift package for embedding CPython on iOS and loading the real Python Hermes agent from an app bundle.
+AgentKit is a proof-of-concept Swift package for embedding an agent runtime into an iOS app.
 
-The current POC intentionally avoids patching Hermes source. Unsupported iOS capabilities are excluded through packaging/configuration: the sample instantiates `AIAgent` with the `safe` toolset, skips memory/context files/soul identity, and uses a dummy OpenAI-compatible endpoint so construction can be tested without making a model request.
+The framework-level API is intentionally not Hermes-specific. AgentKit owns the app-facing abstractions for shell execution, model completion, persistent paths, streaming events, and test doubles. Hermes is currently the first concrete agent implementation: `HermesAgentRuntime` embeds CPython, loads the bundled Python Hermes source, and adapts Hermes terminal/model callbacks to AgentKit services.
 
 ## What Is Included
 
 - `Vendor/Python.xcframework`: BeeWare Python 3.14 for iOS.
-- `Sources/CHermesPython`: a tiny C bridge around `PyConfig` initialization and Python evaluation.
-- `Sources/HermesAgentKit`: a Swift runtime API that initializes Python, runs a Hermes probe, and sends chat messages into Hermes with stream callbacks.
+- `Vendor/AgentKitISH.xcframework`: a local iSH ARM64 static XCFramework for the embedded Linux-like shell backend.
+- `Vendor/ish-arm64`: vendored GPLv3 iSH ARM64 source plus AgentKit embedding patches.
+- `Sources/CHermesPython`: a C bridge around `PyConfig`, Python evaluation, and Hermes callback plumbing.
+- `Sources/AgentKit`: the Swift package target containing generic AgentKit protocols plus the Hermes implementation.
 - `Examples/HermesAgentSample`: an iOS app that bundles Hermes source plus vendored Python dependencies.
 - `Scripts/build-native-wheels.sh`: a reproducible recipe for rebuilding the Rust-backed iOS wheels used by OpenAI/Pydantic.
+
+## Architecture
+
+The public layering is:
+
+- `AgentKitShellEnvironment`: runs shell commands for an agent. Current implementations are `AgentKitISHShellEnvironment` and the older `AgentKitIOSShellEnvironment`.
+- `AgentKitModelProvider`: completes OpenAI-style model requests. Current implementations are `AgentKitMLXModelProvider` and `AgentKitMockModelProvider`.
+- `HermesAgentRuntime`: the Hermes-specific adapter that embeds CPython, loads Hermes, and routes Hermes callbacks into the configured AgentKit shell/model providers.
+- `AgentKitMockShellEnvironment` and `AgentKitMockModelProvider`: test doubles for exercising the Hermes bridge without a full app or real model.
+
+This gives us a clean path for future agent implementations: they should target the AgentKit protocols, while Hermes-specific Python and bootstrap code stays behind `HermesAgentRuntime`.
+
+## App API
+
+The intended app-facing API is:
+
+```swift
+import AgentKit
+
+let agent = try HermesAgent(
+    configuration: .openAI(
+        apiKey: apiKey,
+        model: "gpt-4.1-mini"
+    )
+)
+
+let result = try agent.send("Create hello.txt and read it back") { event in
+    // Stream text, reasoning, tool calls, tool output, timing, and final events.
+    print(event.kind, event.payload)
+}
+```
+
+For offline MLX experiments:
+
+```swift
+let agent = try HermesAgent(
+    configuration: .localMLX(
+        model: AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit,
+        maxTokens: 128,
+        temperature: 0.2
+    )
+)
+```
+
+By default `HermesAgent` looks for bundled Hermes source at `PythonApp/hermes` in the app bundle. Apps can pass an explicit `sourceURL` or a different `bundledSourcePath` when they package Hermes differently.
+
+Session management is also on the facade:
+
+```swift
+let sessions = try agent.sessionState()
+let newSession = try agent.newSession()
+let restored = try agent.loadSession(sessionID)
+```
 
 ## Try the Sample
 
@@ -22,46 +77,21 @@ rtk xcrun simctl install booted ~/Library/Developer/Xcode/DerivedData/HermesAgen
 rtk xcrun simctl launch booted com.daysail.HermesAgentSample
 ```
 
-Tap **Probe** to verify initialization, or fill in Base URL / API key / Model and tap **Send** to run a Hermes chat turn. The app writes the full output to `Documents/hermes-probe-output.txt` in the simulator app container.
+Tap **Probe** to verify Python/Hermes initialization, tap **Probe Shell** to exercise the iSH-backed terminal session, or configure Base URL / API key / Model in settings and send a chat message. The app writes full probe output to `Documents/hermes-probe-output.txt` in the app container.
 
 ## Current Result
 
-Verified on iOS Simulator 26.5:
+Verified in simulator and generic iOS builds:
 
-- Embedded CPython 3.14 initializes from the app bundle.
-- The app imports the package bootstrap module from the Swift package resource bundle.
+- Embedded CPython initializes from the app bundle.
+- The app imports AgentKit bootstrap resources from the Swift package bundle.
 - The app imports real Hermes `run_agent.py` from bundled source.
-- The app constructs `run_agent.AIAgent` successfully.
-- Native dependencies `jiter` and `pydantic_core` are packaged as iOS frameworks via BeeWare’s `.fwork` mechanism.
-
-The current Hermes probe result:
-
-```json
-{
-  "agent_class": "run_agent.AIAgent",
-  "ok": true,
-  "stage": "instantiate",
-  "tool_names": []
-}
-```
-
-The `tool_names` list is empty because the current probe uses the constrained `safe` toolset and only vendors enough dependencies to construct the core agent and OpenAI client. It has not yet attempted a real LLM request or any desktop/tool execution path.
-
-The chat path has also been smoke-tested with the default dummy key against `https://api.openai.com/v1`. That proves bidirectional control and error return through Hermes:
-
-```json
-{
-  "api_calls": 1,
-  "bridge_ok": true,
-  "completed": false,
-  "error": "Error code: 401 - ... invalid_api_key ...",
-  "final_response": null,
-  "ok": false,
-  "stage": "chat"
-}
-```
-
-With a valid OpenAI-compatible endpoint, API key, and model, the same bridge should stream text deltas through the Swift callback. That still needs a live credential smoke.
+- Hermes chat works with OpenAI-compatible endpoints and streams reasoning, tool calls, tool outputs, timing, and final responses back to Swift.
+- Hermes memory/context/soul are enabled with persistent `HERMES_HOME` under Application Support.
+- Hermes terminal calls route into a persistent iSH ARM64 Alpine shell session.
+- The iSH guest bind-mounts the AgentKit workspace at `/workspace`, so shell-created files are visible to Python/file tooling.
+- The bundled iSH rootfs includes `python3`, `rg`, `jq`, and `git` for a first useful agent shell POC.
+- A local MLX/Qwen 2B provider can be wired through the same model-provider bridge as an offline proof of concept.
 
 ## Dependency Packaging Shape
 
@@ -73,21 +103,27 @@ Third-party Python packages are staged in the sample app, not in the Swift packa
 
 The app target build script overlays the correct platform layer into `PythonApp/site-packages`, then runs BeeWare’s `install_python` helper to convert `.so` extension modules into signed app frameworks.
 
-This matters because SwiftPM resource bundles are copied at a point in the Xcode build that is awkward for native Python extension post-processing. App-level staging gives the build script a stable place to process native modules.
-
 ## Rebuilding Native Wheels
 
-The two native wheels currently needed for OpenAI/Pydantic are `jiter==0.13.0` and `pydantic_core==2.41.5`.
+The native wheels currently needed for OpenAI/Pydantic are `jiter==0.13.0` and `pydantic_core==2.41.5`.
 
 ```bash
 rtk ./Scripts/build-native-wheels.sh
 ```
 
-That builds simulator and device wheels into `Build/wheelhouse`. Updating the checked-in sample package layers still needs a small vendor step: unzip the `iphonesimulator` wheels into `Examples/HermesAgentSample/HermesAgentSample/PythonApp/site-packages-iphonesimulator` and the `iphoneos` wheels into `Examples/HermesAgentSample/HermesAgentSample/PythonApp/site-packages-iphoneos`.
+That builds simulator and device wheels into `Build/wheelhouse`. Updating the checked-in sample package layers still needs a vendor step: unzip the `iphonesimulator` wheels into `Examples/HermesAgentSample/HermesAgentSample/PythonApp/site-packages-iphonesimulator` and the `iphoneos` wheels into `Examples/HermesAgentSample/HermesAgentSample/PythonApp/site-packages-iphoneos`.
+
+## iSH Shell Backend
+
+The iSH integration is session-based. A one-shot `ish /bin/sh -c ...` style runner works once, but is not reentrant in a single host process because the iSH kernel keeps global state. AgentKit instead boots one long-lived guest shell, writes commands over a pipe, and reads output until a private completion marker.
+
+The current rootfs is copied from the app bundle into Application Support before first use because iSH mutates its fakefs metadata and the `/workspace` bind mount. This is packaging-heavy but keeps the POC honest: it runs real guest binaries rather than a hand-written command parser.
 
 ## Known Boundaries
 
-- Real agent conversation requires wiring an actual OpenAI-compatible endpoint and handling network errors/timeouts on iOS.
-- Many Hermes tools remain inappropriate for iOS: terminal/process execution, PTYs, subprocess browser automation, MCP stdio servers, runtime package installation, and desktop computer-use.
-- Additional Hermes toolsets will pull in more dependencies. Some are pure Python; others may require more iOS-native wheels.
-- Generic `iphoneos` build has been verified with `CODE_SIGNING_ALLOWED=NO`; real device install still needs normal Apple signing/provisioning.
+- Hermes is still the only agent implementation. The package shape is ready for more, but the generic agent API is intentionally thin until a second implementation proves it.
+- Many desktop-style tools remain inappropriate for iOS: browser automation, MCP stdio servers, runtime package installation outside the guest rootfs, and desktop computer-use.
+- The iSH backend currently supports one embedded shell session per process. Multiple concurrent sessions need more invasive iSH state isolation.
+- The bundled full Alpine fakefs is large; a distributable package should eventually build a smaller purpose-made rootfs.
+- The local MLX model provider is a POC. The 2B model can run offline, but it is weak at tool use compared with a hosted model.
+- Generic `iphoneos` build can be verified with `CODE_SIGNING_ALLOWED=NO`; real device install still needs normal Apple signing/provisioning.

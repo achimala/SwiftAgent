@@ -4,7 +4,7 @@ options:
   deploymentTarget:
     iOS: "17.0"
 packages:
-  HermesAgentKit:
+  AgentKit:
     path: ../..
 settings:
   base:
@@ -23,8 +23,8 @@ targets:
         type: folder
       - path: HermesAgentSample/commandDictionary.plist
     dependencies:
-      - package: HermesAgentKit
-        product: HermesAgentKit
+      - package: AgentKit
+        product: AgentKit
     info:
       path: HermesAgentSample/Info.plist
       properties:

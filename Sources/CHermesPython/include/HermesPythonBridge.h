@@ -17,8 +17,13 @@ typedef char *(*HermesPython_ShellCallback)(
     int *status,
     void *user_context
 );
+typedef char *(*HermesPython_LocalLLMCallback)(
+    const char *request_json,
+    void *user_context
+);
 
 void HermesPython_RegisterShellCallback(HermesPython_ShellCallback callback, void *user_context);
+void HermesPython_RegisterLocalLLMCallback(HermesPython_LocalLLMCallback callback, void *user_context);
 
 char *HermesPython_ConfigureHermes(
     const char *base_url,
