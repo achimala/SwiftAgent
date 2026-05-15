@@ -40,6 +40,15 @@ struct ContentView: View {
                     .disabled(isRunning)
 
                     Button {
+                        runShellProbe()
+                    } label: {
+                        Label("Shell", systemImage: "terminal")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isRunning)
+
+                    Button {
                         sendMessage()
                     } label: {
                         Label(isRunning ? "Running" : "Send", systemImage: "paperplane")
@@ -88,13 +97,38 @@ struct ContentView: View {
             let text: String
             do {
                 let result = try HermesAgentRuntime.shared.probe(hermesSourcePath: path)
+                let toolProbe = try HermesAgentRuntime.shared.toolProbe(hermesSourcePath: path)
                 text = """
                 PYTHON
                 \(result.python)
 
                 HERMES
                 \(result.hermes)
+
+                HERMES TOOL DISPATCH
+                \(toolProbe)
                 """
+            } catch {
+                text = String(describing: error)
+            }
+
+            Self.writeProbeOutput(text)
+
+            await MainActor.run {
+                output = text
+                isRunning = false
+            }
+        }
+    }
+
+    private func runShellProbe() {
+        isRunning = true
+        output = "Starting embedded shell..."
+
+        Task.detached {
+            let text: String
+            do {
+                text = try HermesShellRuntime.shared.smokeTest()
             } catch {
                 text = String(describing: error)
             }

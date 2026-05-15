@@ -1,0 +1,174 @@
+import CHermesShell
+import Darwin
+import Foundation
+import ios_system
+
+public enum HermesShellError: Error, CustomStringConvertible {
+    case missingResources
+    case commandFailedToStart(String)
+    case workspaceSetupFailed(URL)
+
+    public var description: String {
+        switch self {
+        case .missingResources:
+            "HermesAgentKit shell resources were not found"
+        case .commandFailedToStart(let command):
+            "Shell command failed to start: \(command)"
+        case .workspaceSetupFailed(let url):
+            "Shell workspace could not be created at \(url.path)"
+        }
+    }
+}
+
+public struct HermesShellResult: Sendable {
+    public let command: String
+    public let output: String
+    public let status: Int32
+}
+
+public final class HermesShellRuntime: @unchecked Sendable {
+    public static let shared = HermesShellRuntime()
+
+    private let lock = NSRecursiveLock()
+    private var initialized = false
+
+    public init() {}
+
+    public func run(
+        _ command: String,
+        cwd: URL? = nil,
+        environment: [String: String] = [:]
+    ) throws -> HermesShellResult {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let workspace = try cwd ?? Self.defaultWorkspace()
+        try initialize(workspace: workspace)
+        try prepareRun(cwd: workspace, environment: environment)
+
+        let stdoutURL = workspace
+            .appendingPathComponent(".agentkit-shell-stdout-\(UUID().uuidString)")
+        let stderrURL = workspace
+            .appendingPathComponent(".agentkit-shell-stderr-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: stdoutURL)
+            try? FileManager.default.removeItem(at: stderrURL)
+        }
+
+        guard let stdoutFile = fopen(stdoutURL.path, "w+"),
+              let stderrFile = fopen(stderrURL.path, "w+")
+        else {
+            throw HermesShellError.commandFailedToStart(command)
+        }
+        defer {
+            fclose(stdoutFile)
+            fclose(stderrFile)
+            ios_setStreams(stdin, stdout, stderr)
+            HermesShell_SetThreadStreams(stdin, stdout, stderr)
+        }
+
+        ios_setStreams(stdin, stdoutFile, stderrFile)
+        HermesShell_SetThreadStreams(stdin, stdoutFile, stderrFile)
+        let status = ios_system(command)
+        fflush(stdoutFile)
+        fflush(stderrFile)
+
+        var output = (try? String(contentsOf: stdoutURL, encoding: .utf8)) ?? ""
+        let errorOutput = (try? String(contentsOf: stderrURL, encoding: .utf8)) ?? ""
+        if !errorOutput.isEmpty {
+            output += errorOutput
+        }
+
+        return HermesShellResult(
+            command: command,
+            output: output,
+            status: status
+        )
+    }
+
+    public func smokeTest(cwd: URL? = nil) throws -> String {
+        let workspace = try cwd ?? Self.defaultWorkspace()
+        try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+
+        let commands = [
+            "pwd",
+            "echo needle > a.txt",
+            "cat a.txt",
+            "grep needle a.txt | head -20 > out.txt",
+            "cat out.txt",
+            "find . -type f | xargs grep needle",
+            "rg needle . | head -20 > rg-out.txt",
+            "cat rg-out.txt",
+        ]
+
+        var transcript = "WORKSPACE\n\(workspace.path)\n\n"
+        for command in commands {
+            let result = try run(command, cwd: workspace)
+            transcript += "$ \(command)\n"
+            if !result.output.isEmpty {
+                transcript += result.output
+                if !result.output.hasSuffix("\n") {
+                    transcript += "\n"
+                }
+            }
+            transcript += "[status \(result.status)]\n\n"
+        }
+        return transcript
+    }
+
+    private func initialize(workspace: URL) throws {
+        if initialized {
+            return
+        }
+
+        guard let shellResources = Bundle.module.url(forResource: "Shell", withExtension: nil),
+              let commandDictionary = Bundle.module.url(
+                forResource: "commandDictionary",
+                withExtension: "plist",
+                subdirectory: "Shell"
+              )
+        else {
+            throw HermesShellError.missingResources
+        }
+
+        try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+
+        initializeEnvironment()
+        _ = addCommandList(commandDictionary.path)
+
+        let binPath = shellResources.appendingPathComponent("bin", isDirectory: true)
+        let workspaceBinPath = workspace.appendingPathComponent("bin", isDirectory: true)
+        try FileManager.default.createDirectory(at: workspaceBinPath, withIntermediateDirectories: true)
+
+        let existingPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        ios_setenv("PATH", "\(workspaceBinPath.path):\(binPath.path):\(existingPath)", 1)
+        ios_setenv("HOME", workspace.path, 1)
+        ios_setenv("TMPDIR", workspace.path, 1)
+        ios_setenv("LC_ALL", "C", 1)
+        ios_setenv("LANG", "C", 1)
+
+        initialized = true
+    }
+
+    private func prepareRun(cwd: URL, environment: [String: String]) throws {
+        try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
+        guard FileManager.default.changeCurrentDirectoryPath(cwd.path) else {
+            throw HermesShellError.workspaceSetupFailed(cwd)
+        }
+        ios_setDirectoryURL(cwd)
+
+        for (key, value) in environment {
+            ios_setenv(key, value, 1)
+        }
+    }
+
+    private static func defaultWorkspace() throws -> URL {
+        let applicationSupport = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        return applicationSupport.appendingPathComponent("HermesShellWorkspace", isDirectory: true)
+    }
+}

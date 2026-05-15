@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		083D9314B1791FB65A17FE0A /* commandDictionary.plist in Resources */ = {isa = PBXBuildFile; fileRef = 690BF81CD93B6324A828D0ED /* commandDictionary.plist */; };
 		88B1F5EB1951FF117B007686 /* HermesAgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4BB96E7A52833DF97F37AA5E /* HermesAgentKit */; };
 		B85D7B0E2450F1BDF3FA8EC8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */; };
 		E0877EEBB28FA5FFB23EC500 /* HermesAgentSampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */; };
@@ -16,6 +17,7 @@
 		19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		3113797EFC3A21F2B1AAAF05 /* AgentKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentKit; path = ../..; sourceTree = SOURCE_ROOT; };
 		544419CD6953902644C5D8B6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		690BF81CD93B6324A828D0ED /* commandDictionary.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = commandDictionary.plist; sourceTree = "<group>"; };
 		6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesAgentSampleApp.swift; sourceTree = "<group>"; };
 		93A8FEFCE0E20CC1277EAC99 /* HermesAgentSample.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HermesAgentSample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -43,6 +45,7 @@
 		8452D9C7C48291C894DCD08E /* HermesAgentSample */ = {
 			isa = PBXGroup;
 			children = (
+				690BF81CD93B6324A828D0ED /* commandDictionary.plist */,
 				19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */,
 				6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */,
 				544419CD6953902644C5D8B6 /* Info.plist */,
@@ -76,6 +79,7 @@
 			buildPhases = (
 				637B5C9E54D1B7257526790D /* Sources */,
 				E49C65EDAE6F527258D490B8 /* Process Python libraries */,
+				22E98558559AD63005B12000 /* Resources */,
 				7473B4323C46083FED003FCA /* Frameworks */,
 			);
 			buildRules = (
@@ -125,6 +129,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		22E98558559AD63005B12000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				083D9314B1791FB65A17FE0A /* commandDictionary.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
 		E49C65EDAE6F527258D490B8 /* Process Python libraries */ = {

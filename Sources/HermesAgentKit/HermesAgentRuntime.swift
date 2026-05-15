@@ -97,6 +97,7 @@ public final class HermesAgentRuntime: @unchecked Sendable {
         guard status == 0 else {
             throw HermesAgentKitError.python(String(cString: error))
         }
+        HermesPython_RegisterShellCallback(Self.shellCallback, nil)
         initialized = true
     }
 
@@ -137,6 +138,15 @@ public final class HermesAgentRuntime: @unchecked Sendable {
         }
         let hermes = try evaluate(hermesExpression)
         return HermesProbeResult(python: python, hermes: hermes)
+    }
+
+    public func toolProbe(hermesSourcePath: URL? = nil) throws -> String {
+        try initialize(extraPythonPaths: hermesSourcePath.map { [$0] } ?? [])
+
+        if let hermesSourcePath {
+            return try evaluate("__import__('agentkit_bootstrap').hermes_tool_probe(\(Self.pythonLiteral(hermesSourcePath.path)))")
+        }
+        return try evaluate("__import__('agentkit_bootstrap').hermes_tool_probe(None)")
     }
 
     public func prepareHermes(hermesSourcePath: URL) throws -> String {
@@ -216,5 +226,25 @@ public final class HermesAgentRuntime: @unchecked Sendable {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "'", with: "\\'")
         return "'\(escaped)'"
+    }
+
+    private static let shellCallback: HermesPython_ShellCallback = { command, cwd, timeout, status, _ in
+        let commandText = command.map(String.init(cString:)) ?? ""
+        let cwdURL = cwd
+            .map(String.init(cString:))
+            .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) }
+
+        do {
+            let result = try HermesShellRuntime.shared.run(
+                commandText,
+                cwd: cwdURL,
+                environment: ["HERMES_SHELL_TIMEOUT": String(timeout)]
+            )
+            status?.pointee = result.status
+            return strdup(result.output)
+        } catch {
+            status?.pointee = -1
+            return strdup(String(describing: error))
+        }
     }
 }

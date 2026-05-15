@@ -21,6 +21,7 @@ targets:
     resources:
       - path: HermesAgentSample/PythonApp
         type: folder
+      - path: HermesAgentSample/commandDictionary.plist
     dependencies:
       - package: HermesAgentKit
         product: HermesAgentKit

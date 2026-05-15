@@ -7,6 +7,8 @@
 static int g_initialized = 0;
 static HermesPython_StreamCallback g_stream_callback = NULL;
 static void *g_stream_context = NULL;
+static HermesPython_ShellCallback g_shell_callback = NULL;
+static void *g_shell_context = NULL;
 
 static void set_error(char *buffer, int capacity, const char *message) {
     if (buffer == NULL || capacity <= 0) {
@@ -109,8 +111,61 @@ static PyObject *agentkit_emit_stream(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+static PyObject *agentkit_run_shell(PyObject *self, PyObject *args) {
+    const char *command = NULL;
+    const char *cwd = NULL;
+    int timeout = 60;
+
+    if (!PyArg_ParseTuple(args, "s|zi", &command, &cwd, &timeout)) {
+        return NULL;
+    }
+
+    if (g_shell_callback == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "No native shell callback is registered.");
+        return NULL;
+    }
+
+    int status = -1;
+    char *output = g_shell_callback(command, cwd, timeout, &status, g_shell_context);
+    if (output == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Native shell callback failed.");
+        return NULL;
+    }
+
+    PyObject *result = PyDict_New();
+    PyObject *output_object = PyUnicode_FromString(output);
+    PyObject *status_object = PyLong_FromLong(status);
+    free(output);
+
+    if (result == NULL || output_object == NULL || status_object == NULL) {
+        Py_XDECREF(result);
+        Py_XDECREF(output_object);
+        Py_XDECREF(status_object);
+        return NULL;
+    }
+
+    PyDict_SetItemString(result, "output", output_object);
+    PyDict_SetItemString(result, "exit_code", status_object);
+    if (status == 0) {
+        Py_INCREF(Py_None);
+        PyDict_SetItemString(result, "error", Py_None);
+        Py_DECREF(Py_None);
+    } else {
+        PyObject *error_object = PyUnicode_FromFormat("Command exited with status %d", status);
+        if (error_object != NULL) {
+            PyDict_SetItemString(result, "error", error_object);
+            Py_DECREF(error_object);
+        }
+    }
+
+    Py_DECREF(output_object);
+    Py_DECREF(status_object);
+    return result;
+}
+
 static PyMethodDef AgentKitMethods[] = {
     {"emit_stream", agentkit_emit_stream, METH_VARARGS, "Emit a Hermes stream event to the native host."},
+    {"run_shell", agentkit_run_shell, METH_VARARGS, "Run a shell command through the native host."},
     {NULL, NULL, 0, NULL}
 };
 
@@ -272,6 +327,11 @@ int HermesPython_Initialize(const char *python_home, const char *python_paths, c
 
 int HermesPython_IsInitialized(void) {
     return g_initialized || Py_IsInitialized();
+}
+
+void HermesPython_RegisterShellCallback(HermesPython_ShellCallback callback, void *user_context) {
+    g_shell_callback = callback;
+    g_shell_context = user_context;
 }
 
 char *HermesPython_Evaluate(const char *code, char *error, int error_capacity) {

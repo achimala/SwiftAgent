@@ -2,8 +2,10 @@ import importlib
 import json
 import os
 import platform
+import shlex
 import sys
 import traceback
+import uuid
 
 _hermes_source_path = None
 _agent = None
@@ -17,6 +19,132 @@ os.environ.setdefault("HERMES_API_TIMEOUT", "5")
 os.environ.setdefault("HERMES_STREAM_READ_TIMEOUT", "5")
 os.environ.setdefault("HERMES_STREAM_STALE_TIMEOUT", "5")
 os.environ.setdefault("HERMES_API_CALL_STALE_TIMEOUT", "5")
+
+
+def _install_ios_terminal_bridge():
+    try:
+        import _hermes_agentkit
+        from tools import terminal_tool
+        from tools.registry import invalidate_check_fn_cache, registry
+    except Exception:
+        return False
+
+    workspace = os.environ.get("HERMES_IOS_WORKSPACE")
+    if not workspace:
+        workspace = os.path.join(
+            os.path.expanduser("~"),
+            "Library",
+            "Application Support",
+            "HermesShellWorkspace",
+        )
+    os.makedirs(workspace, exist_ok=True)
+    os.environ["TERMINAL_CWD"] = workspace
+    os.environ["TERMINAL_ENV"] = "ios"
+
+    class IOSCommandResult(dict):
+        def __getattr__(self, name):
+            try:
+                return self[name]
+            except KeyError as exc:
+                raise AttributeError(name) from exc
+
+    class IOSAgentKitEnvironment:
+        def __init__(self, cwd):
+            self.cwd = cwd
+            self.env = {}
+
+        def execute(self, command, cwd=None, timeout=None, **_kwargs):
+            stdin_data = _kwargs.get("stdin_data")
+            stdin_path = None
+            actual_command = command
+            if stdin_data is not None:
+                stdin_path = os.path.join(self.cwd, f".agentkit-stdin-{uuid.uuid4().hex}")
+                with open(stdin_path, "w", encoding="utf-8") as f:
+                    f.write(stdin_data)
+                actual_command = f"{command} < {shlex.quote(stdin_path)}"
+
+            try:
+                result = _hermes_agentkit.run_shell(actual_command, cwd or self.cwd, int(timeout or 60))
+            finally:
+                if stdin_path:
+                    try:
+                        os.remove(stdin_path)
+                    except OSError:
+                        pass
+            exit_code = int(result.get("exit_code", -1))
+            output = result.get("output") or ""
+            return IOSCommandResult(
+                output=output,
+                stdout=output,
+                stderr="",
+                exit_code=exit_code,
+                returncode=exit_code,
+            )
+
+    env = IOSAgentKitEnvironment(workspace)
+
+    def ios_terminal_tool(
+        command,
+        background=False,
+        timeout=None,
+        task_id=None,
+        force=False,
+        workdir=None,
+        pty=False,
+        notify_on_complete=False,
+        watch_patterns=None,
+    ):
+        if background:
+            return json.dumps(
+                {
+                    "output": "",
+                    "exit_code": -1,
+                    "error": "iOS shell backend does not support background processes yet.",
+                    "status": "error",
+                },
+                ensure_ascii=False,
+            )
+        result = _hermes_agentkit.run_shell(command, workdir or env.cwd, int(timeout or 60))
+        exit_code = int(result.get("exit_code", -1))
+        return json.dumps(
+            {
+                "output": result.get("output") or "",
+                "exit_code": exit_code,
+                "error": result.get("error"),
+                "status": "success" if exit_code == 0 else "error",
+            },
+            ensure_ascii=False,
+        )
+
+    terminal_tool.terminal_tool = ios_terminal_tool
+    terminal_tool.check_terminal_requirements = lambda: True
+    try:
+        with terminal_tool._env_lock:
+            terminal_tool._active_environments["default"] = env
+            terminal_tool._last_activity["default"] = 0
+    except Exception:
+        pass
+
+    try:
+        import model_tools
+
+        registry.deregister("terminal")
+        registry.register(
+            name="terminal",
+            toolset="terminal",
+            schema=terminal_tool.TERMINAL_SCHEMA,
+            handler=terminal_tool._handle_terminal,
+            check_fn=lambda: True,
+            emoji="\U0001f4bb",
+            max_result_size_chars=100_000,
+        )
+        registry.deregister("process")
+        registry.deregister("search_files")
+        invalidate_check_fn_cache()
+        model_tools._clear_tool_defs_cache()
+    except Exception:
+        pass
+    return True
 
 
 def python_probe():
@@ -100,13 +228,14 @@ def _get_agent():
         sys.path.insert(0, _hermes_source_path)
 
     if _agent is None:
+        _install_ios_terminal_bridge()
         run_agent = importlib.import_module("run_agent")
         agent_class = getattr(run_agent, "AIAgent")
         _agent = agent_class(
             base_url=_agent_config["base_url"],
             api_key=_agent_config["api_key"],
             model=_agent_config["model"],
-            enabled_toolsets=["safe"],
+            enabled_toolsets=["safe", "terminal", "file"],
             quiet_mode=True,
             skip_memory=True,
             skip_context_files=True,
@@ -149,6 +278,70 @@ def hermes_probe(hermes_source_path=None):
             {
                 "ok": False,
                 "stage": "hermes-import",
+                "traceback": traceback.format_exc(),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+
+
+def _decode_tool_result(text):
+    try:
+        return json.loads(text)
+    except Exception:
+        return {"raw": text}
+
+
+def hermes_tool_probe(hermes_source_path=None):
+    try:
+        prepared = json.loads(hermes_prepare(hermes_source_path))
+        if not prepared.get("ok"):
+            return json.dumps(prepared, indent=2, sort_keys=True)
+
+        _get_agent()
+        from tools.registry import registry
+
+        workspace = os.environ["TERMINAL_CWD"]
+        tool_file = os.path.join(workspace, "file-tool.txt")
+        rg_file = os.path.join(workspace, "hermes-rg.txt")
+        terminal_create = registry.dispatch(
+            "terminal",
+            {"command": "echo hermes-tool-needle > hermes-tool.txt"},
+        )
+        terminal_search = registry.dispatch(
+            "terminal",
+            {"command": "rg hermes-tool-needle . | head -20 > hermes-rg.txt"},
+        )
+        write_file = registry.dispatch(
+            "write_file",
+            {"path": tool_file, "content": "from write_file\nhermes-tool-needle\n"},
+        )
+        read_file = registry.dispatch(
+            "read_file",
+            {"path": rg_file, "limit": 20},
+        )
+        read_written_file = registry.dispatch(
+            "read_file",
+            {"path": tool_file, "limit": 20},
+        )
+        return json.dumps(
+            {
+                "ok": True,
+                "stage": "tool-dispatch",
+                "terminal_create": _decode_tool_result(terminal_create),
+                "terminal_search": _decode_tool_result(terminal_search),
+                "write_file": _decode_tool_result(write_file),
+                "read_file": _decode_tool_result(read_file),
+                "read_written_file": _decode_tool_result(read_written_file),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    except Exception:
+        return json.dumps(
+            {
+                "ok": False,
+                "stage": "tool-dispatch",
                 "traceback": traceback.format_exc(),
             },
             indent=2,
