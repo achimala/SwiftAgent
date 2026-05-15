@@ -1,6 +1,6 @@
 import Foundation
 
-public enum HermesAgentError: Error, CustomStringConvertible {
+public enum HermesAgentError: Error, CustomStringConvertible, LocalizedError {
     case missingPythonHome(URL)
     case missingPythonResources
     case missingHermesSource(URL)
@@ -17,6 +17,10 @@ public enum HermesAgentError: Error, CustomStringConvertible {
         case .python(let message):
             message
         }
+    }
+
+    public var errorDescription: String? {
+        description
     }
 }
 

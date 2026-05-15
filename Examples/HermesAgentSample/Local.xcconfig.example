@@ -1,5 +1,7 @@
 // Copy this file to Local.xcconfig to run the sample app on a physical device.
 // Local.xcconfig is ignored by git so your Apple team ID and bundle prefix stay private.
+// The sample worker extension is statically bound to com.daysail.HermesAgentSample.
+// Keep this prefix unless you also update HermesAgentWorker.swift's AppExtensionPoint host.
 
 AGENTKIT_SAMPLE_DEVELOPMENT_TEAM = YOURTEAMID
-AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX = com.yourname.AgentKitSample
+AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX = com.daysail

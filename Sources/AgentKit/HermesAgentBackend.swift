@@ -351,7 +351,10 @@ private final class ExtensionFoundationHermesXPCClient: HermesExtensionXPCClient
             throw error
         }
         guard let identity = box.identity else {
-            throw HermesAgentError.python("No Hermes extension is installed for the configured extension point.")
+            throw HermesAgentError.python(
+                "No Hermes extension is installed for the configured extension point. " +
+                "Check that the worker extension is embedded in the host app and that its bound host bundle identifier matches the app bundle identifier."
+            )
         }
         return identity
     }

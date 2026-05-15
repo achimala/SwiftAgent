@@ -158,7 +158,9 @@ cp Examples/HermesAgentSample/Local.xcconfig.example \
   Examples/HermesAgentSample/Local.xcconfig
 ```
 
-Then edit `Examples/HermesAgentSample/Local.xcconfig` with your Apple development team ID and a bundle ID prefix you own. That file is ignored by git, so your personal signing identity does not get committed.
+Then edit `Examples/HermesAgentSample/Local.xcconfig` with your Apple development team ID. Keep `AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX = com.daysail` for the checked-in sample app: the sample ExtensionKit worker is statically bound to `com.daysail.HermesAgentSample`. That file is ignored by git, so your personal signing identity does not get committed.
+
+For your own app, use your own bundle ID and generate/update the worker entrypoint so its `AppExtensionPoint.Identifier(host:name:)` host string exactly matches your app bundle ID. ExtensionKit requires that host string to be a compile-time static string.
 
 In the sample app, configure an OpenAI-compatible endpoint in settings, send a message, and watch reasoning summaries, tool calls, tool output, timing, and final responses stream back into the chat.
 
