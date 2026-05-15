@@ -40,6 +40,11 @@ final class AgentKitAbstractionsTests: XCTestCase {
         runtime.setModelProvider(AgentKitMockModelProvider())
     }
 
+    func testHermesXPCInterfacesAreConstructible() {
+        XCTAssertNotNil(AgentKitHermesXPC.serviceInterface())
+        XCTAssertNotNil(AgentKitHermesXPC.eventSinkInterface())
+    }
+
     func testHermesAgentCanUseInjectedBackend() throws {
         let backend = MockHermesBackend()
         let sourceURL = URL(fileURLWithPath: NSTemporaryDirectory())

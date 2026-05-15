@@ -55,7 +55,7 @@ public struct HermesChatConfiguration: Sendable {
     }
 }
 
-public struct HermesPersistedMessage: Decodable, Equatable, Sendable {
+public struct HermesPersistedMessage: Codable, Equatable, Sendable {
     public let role: String
     public let content: String
     public let toolName: String?
@@ -71,24 +71,24 @@ public struct HermesPersistedMessage: Decodable, Equatable, Sendable {
     }
 }
 
-public struct HermesPersistedToolCall: Decodable, Equatable, Sendable {
+public struct HermesPersistedToolCall: Codable, Equatable, Sendable {
     public let id: String?
     public let type: String?
     public let function: HermesPersistedToolFunction?
 }
 
-public struct HermesPersistedToolFunction: Decodable, Equatable, Sendable {
+public struct HermesPersistedToolFunction: Codable, Equatable, Sendable {
     public let name: String?
     public let arguments: String?
 }
 
-public struct HermesSessionDetail: Decodable, Equatable, Sendable {
+public struct HermesSessionDetail: Codable, Equatable, Sendable {
     public let id: String
     public let title: String?
     public let messages: [HermesPersistedMessage]
 }
 
-public struct HermesSessionSummary: Decodable, Identifiable, Equatable, Sendable {
+public struct HermesSessionSummary: Codable, Identifiable, Equatable, Sendable {
     public let id: String
     public let title: String?
     public let preview: String
@@ -110,7 +110,7 @@ public struct HermesSessionSummary: Decodable, Identifiable, Equatable, Sendable
     }
 }
 
-public struct HermesSessionState: Decodable, Sendable {
+public struct HermesSessionState: Codable, Sendable {
     public let ok: Bool
     public let currentSessionID: String?
     public let currentSession: HermesSessionDetail?

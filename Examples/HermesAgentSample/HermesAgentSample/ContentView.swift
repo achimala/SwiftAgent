@@ -182,11 +182,22 @@ struct ContentView: View {
         provider == "mlx"
     }
 
+    nonisolated private static func makeAgent(configuration: HermesAgentConfiguration) throws -> HermesAgent {
+        if #available(iOS 26.0, *) {
+            return try HermesAgent(
+                configuration: configuration,
+                sourceURL: HermesAgent.bundledSourceURL(),
+                backend: HermesExtensionProcessBackend(appExtensionPoint: .agentKitHermesWorker)
+            )
+        }
+        return try HermesAgent(configuration: configuration)
+    }
+
     private func loadCurrentSession() {
         let configuration = agentConfiguration
         Task.detached {
             do {
-                let state = try HermesAgent(configuration: configuration).sessionState()
+                let state = try Self.makeAgent(configuration: configuration).sessionState()
                 await MainActor.run {
                     applySessionState(state, renderTranscript: true)
                 }
@@ -202,7 +213,7 @@ struct ContentView: View {
         let configuration = agentConfiguration
         Task.detached {
             do {
-                let state = try HermesAgent(configuration: configuration).sessionState()
+                let state = try Self.makeAgent(configuration: configuration).sessionState()
                 await MainActor.run {
                     applySessionState(state, renderTranscript: false)
                 }
@@ -219,7 +230,7 @@ struct ContentView: View {
         isRunning = true
         Task.detached {
             do {
-                let state = try HermesAgent(configuration: configuration).loadSession(sessionID)
+                let state = try Self.makeAgent(configuration: configuration).loadSession(sessionID)
                 await MainActor.run {
                     applySessionState(state, renderTranscript: true)
                     isRunning = false
@@ -238,7 +249,7 @@ struct ContentView: View {
         isRunning = true
         Task.detached {
             do {
-                let state = try HermesAgent(configuration: configuration).newSession()
+                let state = try Self.makeAgent(configuration: configuration).newSession()
                 await MainActor.run {
                     applySessionState(state, renderTranscript: true)
                     draft = ""
@@ -273,7 +284,7 @@ struct ContentView: View {
         Task.detached {
             let text: String
             do {
-                let agent = try HermesAgent(configuration: configuration)
+                let agent = try Self.makeAgent(configuration: configuration)
                 let result = try agent.probe()
                 let toolProbe = try agent.toolProbe()
                 text = """
@@ -334,7 +345,7 @@ struct ContentView: View {
 
         Task.detached {
             do {
-                let agent = try HermesAgent(configuration: config)
+                let agent = try Self.makeAgent(configuration: config)
                 let final = try agent.send(userMessage) { event in
                     Task { @MainActor in
                         handle(event: event, assistantID: assistantID)

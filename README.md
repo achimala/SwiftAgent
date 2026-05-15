@@ -21,7 +21,7 @@ The public layering is:
 
 - `AgentKitShellEnvironment`: runs shell commands for an agent. Current implementations are `AgentKitISHShellEnvironment` and the older `AgentKitIOSShellEnvironment`.
 - `AgentKitModelProvider`: completes OpenAI-style model requests. Current implementations are `AgentKitMLXModelProvider` and `AgentKitMockModelProvider`.
-- `HermesAgentBackend`: owns the execution boundary for a Hermes agent. The current working implementation is `HermesInProcessBackend`; the API also has an explicit `HermesAgentExecutionMode` for future ExtensionFoundation/XPC isolation.
+- `HermesAgentBackend`: owns the execution boundary for a Hermes agent. `HermesInProcessBackend` runs in the host app; `HermesExtensionProcessBackend` launches an ExtensionKit worker over XPC on iOS 26+.
 - `HermesAgentRuntime`: the Hermes-specific adapter that embeds CPython, loads Hermes, and routes Hermes callbacks into the configured AgentKit shell/model providers.
 - `AgentKitMockShellEnvironment` and `AgentKitMockModelProvider`: test doubles for exercising the Hermes bridge without a full app or real model.
 
@@ -29,7 +29,7 @@ This gives us a clean path for future agent implementations: they should target 
 
 AgentKit does not expose package-level singleton instances. Each `HermesAgent` gets its own runtime facade and provider objects by default, and callers can inject custom shell/model implementations for tests or app-specific behavior. The embedded CPython interpreter is still process-global, so native Python calls are serialized internally; independent agent objects are supported, but true simultaneous Hermes execution needs deeper interpreter/session isolation.
 
-The next isolation layer is out-of-process execution. On iOS, the viable direction is an app extension process launched with ExtensionFoundation and contacted over XPC, not `fork`/`exec` child processes. AgentKit now has the backend boundary needed for that work; `.automatic` currently resolves to the in-process backend until the extension target exists.
+The next isolation layer is out-of-process execution. On iOS, the viable direction is an app extension process launched with ExtensionFoundation and contacted over XPC, not `fork`/`exec` child processes. AgentKit now includes the backend and sample app extension plumbing for that path. The current extension smoke proves Python/Hermes/session calls, but terminal/file tools still fail in the worker because the iSH shell exits immediately there.
 
 ## App API
 
@@ -99,6 +99,7 @@ Verified in simulator and generic iOS builds:
 - The iSH guest bind-mounts the AgentKit workspace at `/workspace`, so shell-created files are visible to Python/file tooling.
 - The bundled iSH rootfs includes `python3`, `rg`, `jq`, and `git` for a first useful agent shell POC.
 - A local MLX/Qwen 2B provider can be wired through the same model-provider bridge as an offline proof of concept.
+- The ExtensionKit/XPC backend launches in the simulator and can initialize Python, import Hermes, and create a Hermes session out of process.
 
 ## Dependency Packaging Shape
 
@@ -149,6 +150,7 @@ The current rootfs is copied from the app bundle into Application Support before
 - Hermes is still the only agent implementation. The package shape is ready for more, but the generic agent API is intentionally thin until a second implementation proves it.
 - Many desktop-style tools remain inappropriate for iOS: browser automation, MCP stdio servers, runtime package installation outside the guest rootfs, and desktop computer-use.
 - The iSH backend currently supports one embedded shell session per process. Multiple concurrent sessions need more invasive iSH state isolation.
+- iSH does not currently work inside the ExtensionKit worker process: the shell closes before the command marker and file tools fail because writes go through that shell. Until this is fixed, out-of-process Hermes is useful for isolation experiments but not yet the default for fully tooled agents.
 - The bundled full Alpine fakefs is large; a distributable package should eventually build a smaller purpose-made rootfs.
 - The local MLX model provider is a POC. The 2B model can run offline, but it is weak at tool use compared with a hosted model.
 - Generic `iphoneos` build can be verified with `CODE_SIGNING_ALLOWED=NO`; real device install still needs normal Apple signing/provisioning.

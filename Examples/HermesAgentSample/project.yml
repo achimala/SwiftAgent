@@ -25,6 +25,8 @@ targets:
     dependencies:
       - package: AgentKit
         product: AgentKit
+      - target: HermesAgentWorker
+        embed: true
     info:
       path: HermesAgentSample/Info.plist
       properties:
@@ -39,6 +41,30 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.daysail.HermesAgentSample
         ENABLE_TESTABILITY: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        EX_ENABLE_EXTENSION_POINT_GENERATION: YES
+    postCompileScripts:
+      - name: Process Python libraries
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          "$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh"
+  HermesAgentWorker:
+    type: extensionkit-extension
+    platform: iOS
+    sources:
+      - path: HermesAgentWorker
+    dependencies:
+      - package: AgentKit
+        product: AgentKit
+    info:
+      path: HermesAgentWorker/Info.plist
+      properties:
+        CFBundleDisplayName: Hermes Worker
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.daysail.HermesAgentSample.HermesAgentWorker
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
         ENABLE_USER_SCRIPT_SANDBOXING: NO
     postCompileScripts:
       - name: Process Python libraries

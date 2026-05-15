@@ -10,6 +10,7 @@ enum SampleSmokeRunners {
         await HermesMLXStressSmokeRunner.runIfRequested()
         await HermesMLXToolSmokeRunner.runIfRequested()
         await AgentKitISHSmokeRunner.runIfRequested()
+        await HermesExtensionProbeSmokeRunner.runIfRequested()
     }
 }
 
@@ -258,6 +259,43 @@ private enum AgentKitISHSmokeRunner {
                 cwd: workspace
             )
             await recorder.write("second status=\(second.status) output=\(second.output)")
+            await recorder.write("done ok")
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            await recorder.write("done error=\(message)")
+        }
+    }
+}
+
+private enum HermesExtensionProbeSmokeRunner {
+    private static let argument = "--hermes-extension-probe-smoke"
+
+    static func runIfRequested() async {
+        guard ProcessInfo.processInfo.arguments.contains(argument) else { return }
+
+        let recorder = SmokeRecorder(filename: "hermes-extension-probe-smoke.log")
+        await recorder.write("start")
+
+        do {
+            guard #available(iOS 26.0, *) else {
+                await recorder.write("done skipped=requires-ios-26")
+                return
+            }
+
+            let agent = try HermesAgent(
+                configuration: .openAI(apiKey: "probe-key", model: "probe-model"),
+                sourceURL: HermesAgent.bundledSourceURL(),
+                backend: HermesExtensionProcessBackend(appExtensionPoint: .agentKitHermesWorker)
+            )
+            let result = try agent.probe()
+            await recorder.write("python \(result.python)")
+            await recorder.write("hermes \(result.hermes)")
+            let toolProbe = try agent.toolProbe()
+            await recorder.write("toolProbe \(toolProbe)")
+            let sessionState = try agent.newSession()
+            await recorder.write(
+                "newSession current=\(sessionState.currentSessionID ?? "nil") sessions=\(sessionState.sessions.count)"
+            )
             await recorder.write("done ok")
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription

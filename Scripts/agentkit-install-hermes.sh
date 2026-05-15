@@ -96,3 +96,16 @@ install_python "$PYTHON_XCFRAMEWORK_NAME" "PythonApp/site-packages"
 if [ -n "$ORIGINAL_PROJECT_DIR" ]; then
   PROJECT_DIR="$ORIGINAL_PROJECT_DIR"
 fi
+
+if [ -n "${BUILT_PRODUCTS_DIR:-}" ]; then
+  FRAMEWORKS_DESTINATION="$CODESIGNING_FOLDER_PATH/Frameworks"
+  mkdir -p "$FRAMEWORKS_DESTINATION"
+
+  for FRAMEWORK_NAME in Python ios_system awk dash files shell text; do
+    FRAMEWORK_SOURCE="$BUILT_PRODUCTS_DIR/$FRAMEWORK_NAME.framework"
+    if [ -d "$FRAMEWORK_SOURCE" ]; then
+      echo "Installing AgentKit binary framework: $FRAMEWORK_NAME.framework"
+      rsync -a --delete "$FRAMEWORK_SOURCE/" "$FRAMEWORKS_DESTINATION/$FRAMEWORK_NAME.framework/"
+    fi
+  done
+fi
