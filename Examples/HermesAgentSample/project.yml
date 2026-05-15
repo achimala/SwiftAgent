@@ -45,26 +45,4 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -euo pipefail
-          rm -rf "$CODESIGNING_FOLDER_PATH/PythonApp"
-          mkdir -p "$CODESIGNING_FOLDER_PATH/PythonApp/site-packages"
-          rsync -a --delete \
-            --exclude "/site-packages/" \
-            --exclude "/site-packages-iphoneos/" \
-            --exclude "/site-packages-iphonesimulator/" \
-            "$PROJECT_DIR/HermesAgentSample/PythonApp/" \
-            "$CODESIGNING_FOLDER_PATH/PythonApp/"
-          rsync -a --delete \
-            "$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages/" \
-            "$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/"
-          if [ "$EFFECTIVE_PLATFORM_NAME" = "-iphonesimulator" ]; then
-            rsync -a "$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages-iphonesimulator/" "$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/"
-          elif [ "$EFFECTIVE_PLATFORM_NAME" = "-iphoneos" ]; then
-            rsync -a "$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages-iphoneos/" "$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/"
-          else
-            echo "Unsupported platform for HermesAgentSample Python packages: $EFFECTIVE_PLATFORM_NAME"
-            exit 1
-          fi
-          export EXPANDED_CODE_SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
-          export EXPANDED_CODE_SIGN_IDENTITY_NAME="${EXPANDED_CODE_SIGN_IDENTITY_NAME:-Sign to Run Locally}"
-          source "$PROJECT_DIR/../../Vendor/Python.xcframework/build/utils.sh"
-          install_python "../../Vendor/Python.xcframework" "PythonApp/site-packages"
+          "$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh"

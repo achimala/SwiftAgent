@@ -1,0 +1,98 @@
+#!/bin/sh
+set -euo pipefail
+
+if [ -z "${CODESIGNING_FOLDER_PATH:-}" ]; then
+  echo "CODESIGNING_FOLDER_PATH is not set. Run this from an Xcode app target build phase."
+  exit 1
+fi
+
+if [ -z "${EFFECTIVE_PLATFORM_NAME:-}" ]; then
+  echo "EFFECTIVE_PLATFORM_NAME is not set. Run this from an Xcode app target build phase."
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+AGENTKIT_PACKAGE_DIR="${AGENTKIT_PACKAGE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd -P)}"
+PYTHON_APP_SOURCE="${AGENTKIT_PYTHON_APP_SOURCE:-}"
+
+if [ -z "$PYTHON_APP_SOURCE" ]; then
+  if [ -n "${PROJECT_DIR:-}" ] && [ -d "$PROJECT_DIR/PythonApp" ]; then
+    PYTHON_APP_SOURCE="$PROJECT_DIR/PythonApp"
+  elif [ -n "${PROJECT_DIR:-}" ] && [ -d "$PROJECT_DIR/HermesAgentSample/PythonApp" ]; then
+    PYTHON_APP_SOURCE="$PROJECT_DIR/HermesAgentSample/PythonApp"
+  else
+    PYTHON_APP_SOURCE="$AGENTKIT_PACKAGE_DIR/Examples/HermesAgentSample/HermesAgentSample/PythonApp"
+  fi
+fi
+
+PYTHON_XCFRAMEWORK="${AGENTKIT_PYTHON_XCFRAMEWORK:-$AGENTKIT_PACKAGE_DIR/Vendor/Python.xcframework}"
+
+if [ ! -d "$PYTHON_APP_SOURCE" ]; then
+  echo "AgentKit Python app payload was not found at: $PYTHON_APP_SOURCE"
+  echo "Set AGENTKIT_PYTHON_APP_SOURCE to a directory containing hermes, site-packages, and platform package overlays."
+  exit 1
+fi
+
+if [ ! -d "$PYTHON_XCFRAMEWORK" ]; then
+  echo "AgentKit Python.xcframework was not found at: $PYTHON_XCFRAMEWORK"
+  echo "Set AGENTKIT_PYTHON_XCFRAMEWORK to the vendored Python.xcframework path."
+  exit 1
+fi
+
+case "$EFFECTIVE_PLATFORM_NAME" in
+  -iphonesimulator)
+    PLATFORM_PACKAGES="site-packages-iphonesimulator"
+    ;;
+  -iphoneos)
+    PLATFORM_PACKAGES="site-packages-iphoneos"
+    ;;
+  *)
+    echo "Unsupported platform for AgentKit Python packages: $EFFECTIVE_PLATFORM_NAME"
+    exit 1
+    ;;
+esac
+
+DESTINATION="$CODESIGNING_FOLDER_PATH/PythonApp"
+echo "Installing AgentKit Python payload"
+echo "  source: $PYTHON_APP_SOURCE"
+echo "  destination: $DESTINATION"
+echo "  platform packages: $PLATFORM_PACKAGES"
+
+rm -rf "$DESTINATION"
+mkdir -p "$DESTINATION/site-packages"
+
+rsync -a --delete \
+  --exclude "/site-packages/" \
+  --exclude "/site-packages-iphoneos/" \
+  --exclude "/site-packages-iphonesimulator/" \
+  "$PYTHON_APP_SOURCE/" \
+  "$DESTINATION/"
+
+if [ -d "$PYTHON_APP_SOURCE/site-packages" ]; then
+  rsync -a --delete \
+    "$PYTHON_APP_SOURCE/site-packages/" \
+    "$DESTINATION/site-packages/"
+fi
+
+if [ -d "$PYTHON_APP_SOURCE/$PLATFORM_PACKAGES" ]; then
+  rsync -a \
+    "$PYTHON_APP_SOURCE/$PLATFORM_PACKAGES/" \
+    "$DESTINATION/site-packages/"
+else
+  echo "Required platform package overlay missing: $PYTHON_APP_SOURCE/$PLATFORM_PACKAGES"
+  exit 1
+fi
+
+export EXPANDED_CODE_SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
+export EXPANDED_CODE_SIGN_IDENTITY_NAME="${EXPANDED_CODE_SIGN_IDENTITY_NAME:-Sign to Run Locally}"
+
+ORIGINAL_PROJECT_DIR="${PROJECT_DIR:-}"
+PROJECT_DIR="$(cd "$(dirname "$PYTHON_XCFRAMEWORK")" && pwd -P)"
+PYTHON_XCFRAMEWORK_NAME="$(basename "$PYTHON_XCFRAMEWORK")"
+
+source "$PYTHON_XCFRAMEWORK/build/utils.sh"
+install_python "$PYTHON_XCFRAMEWORK_NAME" "PythonApp/site-packages"
+
+if [ -n "$ORIGINAL_PROJECT_DIR" ]; then
+  PROJECT_DIR="$ORIGINAL_PROJECT_DIR"
+fi

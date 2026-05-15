@@ -10,7 +10,8 @@ The framework-level API is intentionally not Hermes-specific. AgentKit owns the 
 - `Vendor/AgentKitISH.xcframework`: a local iSH ARM64 static XCFramework for the embedded Linux-like shell backend.
 - `Vendor/ish-arm64`: vendored GPLv3 iSH ARM64 source plus AgentKit embedding patches.
 - `Sources/CHermesPython`: a C bridge around `PyConfig`, Python evaluation, and Hermes callback plumbing.
-- `Sources/AgentKit`: the Swift package target containing generic AgentKit protocols plus the Hermes implementation.
+- `Sources/AgentKitCore`: the lightweight protocol/path layer and test doubles.
+- `Sources/AgentKit`: the batteries-included iOS POC target that re-exports `AgentKitCore` and includes Hermes, iSH shell, iOS shell, and MLX providers.
 - `Examples/HermesAgentSample`: an iOS app that bundles Hermes source plus vendored Python dependencies.
 - `Scripts/build-native-wheels.sh`: a reproducible recipe for rebuilding the Rust-backed iOS wheels used by OpenAI/Pydantic.
 
@@ -97,13 +98,31 @@ Verified in simulator and generic iOS builds:
 
 ## Dependency Packaging Shape
 
-Third-party Python packages are staged in the sample app, not in the Swift package resource bundle:
+AgentKit includes a reusable Xcode build phase helper:
+
+```bash
+set -euo pipefail
+"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/AgentKit/Scripts/agentkit-install-hermes.sh"
+```
+
+For local development against this repo, the sample app uses:
+
+```bash
+set -euo pipefail
+"$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh"
+```
+
+The script copies the Hermes Python payload into the final app bundle, overlays the platform-specific Python packages, and runs BeeWare's `install_python` helper to copy the Python standard library and convert `.so` extension modules into signed app frameworks.
+
+By default the script uses the checked-in sample payload at `Examples/HermesAgentSample/HermesAgentSample/PythonApp`. Apps can set `AGENTKIT_PYTHON_APP_SOURCE` to their own payload directory and `AGENTKIT_PYTHON_XCFRAMEWORK` to a custom Python framework path.
+
+Third-party Python packages are staged with this layout:
 
 - `PythonApp/site-packages`: pure Python/common dependencies.
 - `PythonApp/site-packages-iphonesimulator`: simulator-native wheels.
 - `PythonApp/site-packages-iphoneos`: device-native wheels.
 
-The app target build script overlays the correct platform layer into `PythonApp/site-packages`, then runs BeeWare’s `install_python` helper to convert `.so` extension modules into signed app frameworks.
+SwiftPM cannot silently add this final app-bundle processing step to a consuming iOS app, so a small explicit Run Script phase is still required for the Python/Hermes backend. The app-facing Swift code stays at `import AgentKit`.
 
 ## Rebuilding Native Wheels
 

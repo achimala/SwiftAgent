@@ -174,7 +174,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\nrm -rf \"$CODESIGNING_FOLDER_PATH/PythonApp\"\nmkdir -p \"$CODESIGNING_FOLDER_PATH/PythonApp/site-packages\"\nrsync -a --delete \\\n  --exclude \"/site-packages/\" \\\n  --exclude \"/site-packages-iphoneos/\" \\\n  --exclude \"/site-packages-iphonesimulator/\" \\\n  \"$PROJECT_DIR/HermesAgentSample/PythonApp/\" \\\n  \"$CODESIGNING_FOLDER_PATH/PythonApp/\"\nrsync -a --delete \\\n  \"$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages/\" \\\n  \"$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/\"\nif [ \"$EFFECTIVE_PLATFORM_NAME\" = \"-iphonesimulator\" ]; then\n  rsync -a \"$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages-iphonesimulator/\" \"$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/\"\nelif [ \"$EFFECTIVE_PLATFORM_NAME\" = \"-iphoneos\" ]; then\n  rsync -a \"$PROJECT_DIR/HermesAgentSample/PythonApp/site-packages-iphoneos/\" \"$CODESIGNING_FOLDER_PATH/PythonApp/site-packages/\"\nelse\n  echo \"Unsupported platform for HermesAgentSample Python packages: $EFFECTIVE_PLATFORM_NAME\"\n  exit 1\nfi\nexport EXPANDED_CODE_SIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:--}\"\nexport EXPANDED_CODE_SIGN_IDENTITY_NAME=\"${EXPANDED_CODE_SIGN_IDENTITY_NAME:-Sign to Run Locally}\"\nsource \"$PROJECT_DIR/../../Vendor/Python.xcframework/build/utils.sh\"\ninstall_python \"../../Vendor/Python.xcframework\" \"PythonApp/site-packages\"\n";
+			shellScript = "set -euo pipefail\n\"$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
