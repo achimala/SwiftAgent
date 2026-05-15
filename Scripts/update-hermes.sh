@@ -21,6 +21,14 @@ fi
 CACHE_DIR="${AGENTKIT_HERMES_CACHE_DIR:-$AGENTKIT_PACKAGE_DIR/Build/hermes-agent-src}"
 STAGE_DIR="${AGENTKIT_HERMES_STAGE_DIR:-$AGENTKIT_PACKAGE_DIR/Build/hermes-agent-stage}"
 PAYLOAD_DIR="${AGENTKIT_HERMES_PAYLOAD_DIR:-$AGENTKIT_PACKAGE_DIR/Payloads/Hermes/PythonApp}"
+UPDATE_LOCK_DIR="${AGENTKIT_HERMES_UPDATE_LOCK_DIR:-$AGENTKIT_PACKAGE_DIR/Build/hermes-agent-update.lock}"
+
+mkdir -p "$(dirname "$UPDATE_LOCK_DIR")"
+while ! mkdir "$UPDATE_LOCK_DIR" 2>/dev/null; do
+  echo "Waiting for another Hermes payload update to finish..."
+  sleep 2
+done
+trap 'rm -rf "$UPDATE_LOCK_DIR"' EXIT INT TERM
 
 if [ ! -d "$CACHE_DIR/.git" ]; then
   rm -rf "$CACHE_DIR"

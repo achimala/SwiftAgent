@@ -35,7 +35,7 @@ AgentKit uses binary XCFrameworks internally for Python, iSH, and shell support,
 
 ## Embed Hermes
 
-AgentKit expects the app bundle to include a Python payload at `PythonApp/hermes` by default. The package includes a pinned Hermes payload at `Payloads/Hermes/PythonApp` plus a build script that copies Hermes, stages platform-specific Python packages, installs the Python stdlib, and converts native Python extension modules into signed app frameworks.
+AgentKit expects the app bundle to include a Python payload at `PythonApp/hermes` by default. The package includes a pinned Hermes source lock, checked-in Python dependency layers, and a build script that fetches the pinned Hermes release if needed, stages platform-specific Python packages, installs the Python stdlib, and converts native Python extension modules into signed app frameworks.
 
 Add this Run Script build phase to your app target:
 
@@ -51,11 +51,13 @@ set -euo pipefail
 "$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh"
 ```
 
-Normal app builds do not fetch Hermes from the network. To intentionally update the vendored Hermes source, edit `Vendor/hermes-agent.lock` after reviewing the upstream release, then run:
+Fresh checkouts fetch the pinned Hermes source on the first build. To prefetch explicitly, or to refresh after editing `Vendor/hermes-agent.lock`, run:
 
 ```bash
 ./Scripts/update-hermes.sh
 ```
+
+Set `AGENTKIT_AUTO_FETCH_HERMES=NO` in the build phase environment if CI should fail instead of fetching when the local Hermes payload is missing.
 
 ## Recommended: Add The Worker Extension
 

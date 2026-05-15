@@ -14,14 +14,17 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 AGENTKIT_PACKAGE_DIR="${AGENTKIT_PACKAGE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd -P)}"
 PYTHON_APP_SOURCE="${AGENTKIT_PYTHON_APP_SOURCE:-}"
+PYTHON_APP_SOURCE_IS_DEFAULT=0
 
 if [ -z "$PYTHON_APP_SOURCE" ]; then
   if [ -n "${PROJECT_DIR:-}" ] && [ -d "$PROJECT_DIR/PythonApp" ]; then
     PYTHON_APP_SOURCE="$PROJECT_DIR/PythonApp"
   elif [ -d "$AGENTKIT_PACKAGE_DIR/Payloads/Hermes/PythonApp" ]; then
     PYTHON_APP_SOURCE="$AGENTKIT_PACKAGE_DIR/Payloads/Hermes/PythonApp"
+    PYTHON_APP_SOURCE_IS_DEFAULT=1
   else
     PYTHON_APP_SOURCE="$AGENTKIT_PACKAGE_DIR/Payloads/Hermes/PythonApp"
+    PYTHON_APP_SOURCE_IS_DEFAULT=1
   fi
 fi
 
@@ -34,9 +37,16 @@ if [ ! -d "$PYTHON_APP_SOURCE" ]; then
   exit 1
 fi
 
+if [ ! -d "$PYTHON_APP_SOURCE/hermes" ] &&
+   [ "$PYTHON_APP_SOURCE_IS_DEFAULT" = "1" ] &&
+   [ "${AGENTKIT_AUTO_FETCH_HERMES:-YES}" != "NO" ]; then
+  echo "AgentKit Hermes source is missing; fetching pinned Hermes payload..."
+  AGENTKIT_HERMES_PAYLOAD_DIR="$PYTHON_APP_SOURCE" "$SCRIPT_DIR/update-hermes.sh"
+fi
+
 if [ ! -d "$PYTHON_APP_SOURCE/hermes" ]; then
   echo "AgentKit Hermes source was not found at: $PYTHON_APP_SOURCE/hermes"
-  echo "Run Scripts/update-hermes.sh or set AGENTKIT_PYTHON_APP_SOURCE to a complete PythonApp payload."
+  echo "Run Scripts/update-hermes.sh, leave AGENTKIT_AUTO_FETCH_HERMES enabled, or set AGENTKIT_PYTHON_APP_SOURCE to a complete PythonApp payload."
   exit 1
 fi
 
