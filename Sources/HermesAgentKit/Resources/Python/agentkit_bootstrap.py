@@ -292,6 +292,21 @@ def _decode_tool_result(text):
         return {"raw": text}
 
 
+def _tool_result_is_error(text):
+    try:
+        decoded = json.loads(text)
+        if isinstance(decoded, dict):
+            status = decoded.get("status")
+            if status == "error":
+                return True
+            error = decoded.get("error")
+            return bool(error)
+    except Exception:
+        pass
+    lowered = str(text).lower()
+    return lowered.startswith("error ") or "tool execution failed" in lowered
+
+
 def hermes_tool_probe(hermes_source_path=None):
     try:
         prepared = json.loads(hermes_prepare(hermes_source_path))
@@ -355,6 +370,59 @@ def hermes_chat(message):
 
         def on_delta(delta):
             _emit_stream("delta", "" if delta is None else delta)
+
+        def emit_json(event, payload):
+            try:
+                _emit_stream(event, json.dumps(payload, ensure_ascii=False))
+            except Exception:
+                _emit_stream(event, str(payload))
+
+        def on_tool_start(tool_call_id, name, args):
+            emit_json(
+                "tool_start",
+                {
+                    "id": tool_call_id,
+                    "name": name,
+                    "args": args if isinstance(args, dict) else {},
+                },
+            )
+
+        def on_tool_complete(tool_call_id, name, args, result):
+            result_text = result if isinstance(result, str) else json.dumps(result, ensure_ascii=False)
+            emit_json(
+                "tool_complete",
+                {
+                    "id": tool_call_id,
+                    "name": name,
+                    "ok": not _tool_result_is_error(result_text),
+                    "result_preview": result_text[:1200],
+                },
+            )
+
+        def on_tool_progress(status, name, preview=None, args=None, **kwargs):
+            emit_json(
+                "tool_progress",
+                {
+                    "status": status,
+                    "name": name,
+                    "preview": preview,
+                    "duration": kwargs.get("duration"),
+                    "is_error": kwargs.get("is_error"),
+                },
+            )
+
+        def on_tool_gen(name):
+            emit_json("tool_gen", {"name": name})
+
+        def on_interim(text, already_streamed=False):
+            if not already_streamed:
+                _emit_stream("interim", text)
+
+        agent.tool_start_callback = on_tool_start
+        agent.tool_complete_callback = on_tool_complete
+        agent.tool_progress_callback = on_tool_progress
+        agent.tool_gen_callback = on_tool_gen
+        agent.interim_assistant_callback = on_interim
 
         _emit_stream("status", "sending")
         result = agent.run_conversation(message, stream_callback=on_delta)
