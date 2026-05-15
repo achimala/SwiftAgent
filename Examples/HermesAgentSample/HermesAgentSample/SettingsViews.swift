@@ -12,9 +12,6 @@ struct SettingsView: View {
     @Binding var enableSoul: Bool
     @Binding var enableContext: Bool
     @Binding var enableMemory: Bool
-    let isRunning: Bool
-    let onShellProbe: () -> Void
-    let onHermesProbe: () -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -126,24 +123,6 @@ struct SettingsView: View {
                             Label("Edit AGENTS.md", systemImage: "doc.text")
                         }
                     }
-                }
-
-                Section("Diagnostics") {
-                    Button {
-                        dismiss()
-                        onHermesProbe()
-                    } label: {
-                        Label("Probe Hermes", systemImage: "bolt.circle")
-                    }
-                    .disabled(isRunning)
-
-                    Button {
-                        dismiss()
-                        onShellProbe()
-                    } label: {
-                        Label("Probe Shell", systemImage: "terminal")
-                    }
-                    .disabled(isRunning)
                 }
             }
             .navigationTitle("Settings")

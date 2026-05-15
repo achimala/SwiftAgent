@@ -103,7 +103,7 @@ struct ChatRow: View {
         switch entry.kind {
         case .user:
             330
-        case .tool, .debug, .reasoning:
+        case .tool, .reasoning:
             520
         default:
             620
@@ -122,8 +122,6 @@ struct ChatRow: View {
             Color(uiColor: .secondarySystemBackground).opacity(0.7)
         case .error:
             Color.red.opacity(0.12)
-        case .debug:
-            Color(uiColor: .secondarySystemBackground)
         case .reasoning:
             Color(uiColor: .tertiarySystemBackground)
         }
@@ -135,7 +133,7 @@ struct ChatRow: View {
 
     private var textFont: Font {
         switch entry.kind {
-        case .debug, .reasoning:
+        case .reasoning:
             .system(.footnote, design: .monospaced)
         default:
             .body
@@ -184,8 +182,6 @@ struct ChatRow: View {
             "circle.dotted"
         case .error:
             "exclamationmark.triangle"
-        case .debug:
-            "doc.text.magnifyingglass"
         case .reasoning:
             "brain.head.profile"
         case .user:

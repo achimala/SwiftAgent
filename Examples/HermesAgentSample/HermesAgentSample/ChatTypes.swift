@@ -7,7 +7,6 @@ struct ChatEntry: Identifiable, Equatable {
         case tool
         case status
         case error
-        case debug
         case reasoning
     }
 
@@ -44,18 +43,6 @@ struct ToolEvent: Decodable {
         case preview
         case duration
         case isError = "is_error"
-    }
-}
-
-struct TimingEvent: Decodable {
-    let label: String
-    let elapsedMs: Double
-    let detail: String?
-
-    enum CodingKeys: String, CodingKey {
-        case label
-        case elapsedMs = "elapsed_ms"
-        case detail
     }
 }
 

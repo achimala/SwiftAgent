@@ -13,14 +13,13 @@ struct ContentView: View {
     @AppStorage("hermes.enableContext") private var enableContext = true
     @AppStorage("hermes.enableMemory") private var enableMemory = true
 
-    @State private var draft = "Create a file named hello.txt that says hello from Hermes, then read it back."
+    @State private var draft = ""
     @State private var entries: [ChatEntry] = ChatTranscriptFormatter.welcomeEntries()
     @State private var isRunning = false
     @State private var showingSettings = false
     @State private var showingSessions = false
     @State private var sessions: [HermesSessionSummary] = []
     @State private var currentSessionID: String?
-    @State private var timingEvents: [UUID: [TimingEvent]] = [:]
     @State private var activeReasoningEntries: [UUID: UUID] = [:]
     @State private var assistantIDsWithReasoning: Set<UUID> = []
     @FocusState private var draftFocused: Bool
@@ -29,9 +28,14 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 transcript
-                composer
             }
             .background(Color(uiColor: .systemBackground))
+            .safeAreaInset(edge: .bottom) {
+                composer
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 8)
+            }
             .navigationTitle("Hermes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -79,10 +83,7 @@ struct ContentView: View {
                     mlxTemperature: $mlxTemperature,
                     enableSoul: $enableSoul,
                     enableContext: $enableContext,
-                    enableMemory: $enableMemory,
-                    isRunning: isRunning,
-                    onShellProbe: runShellProbe,
-                    onHermesProbe: runProbe
+                    enableMemory: $enableMemory
                 )
             }
             .sheet(isPresented: $showingSessions) {
@@ -105,55 +106,108 @@ struct ContentView: View {
     }
 
     private var transcript: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(entries) { entry in
-                        ChatRow(entry: entry)
-                            .id(entry.id)
-                    }
-                    Color.clear
-                        .frame(height: 1)
-                        .id("bottom")
+        ZStack {
+            if entries.isEmpty {
+                EmptyChatView { prompt in
+                    draft = prompt
+                    draftFocused = true
                 }
-                .padding(.top, 28)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 22)
+                .transition(.opacity)
             }
-            .onChange(of: entries) { _, _ in
-                withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo("bottom", anchor: .bottom)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(entries) { entry in
+                            ChatRow(entry: entry)
+                                .id(entry.id)
+                        }
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom")
+                    }
+                    .padding(.top, 28)
+                    .padding(.bottom, 12)
+                }
+                .opacity(entries.isEmpty ? 0 : 1)
+                .onChange(of: entries) { _, _ in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
                 }
             }
         }
     }
 
-    private var composer: some View {
-        VStack(spacing: 8) {
-            Divider()
-            HStack(alignment: .bottom, spacing: 10) {
-                TextField("Message Hermes", text: $draft, axis: .vertical)
-                    .lineLimit(1...5)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .focused($draftFocused)
-                    .disabled(isRunning)
+    private var canSend: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isRunning
+    }
 
-                Button {
-                    sendMessage()
-                } label: {
-                    Image(systemName: isRunning ? "stop.circle.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 32, weight: .semibold))
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .disabled(isRunning || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    @ViewBuilder
+    private var composer: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 0) {
+                composerField
+                    .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 12)
+        } else {
+            composerField
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .strokeBorder(Color(uiColor: .separator).opacity(0.18))
+                }
+                .shadow(color: .black.opacity(0.08), radius: 18, y: 8)
         }
-        .background(.bar)
+    }
+
+    private var composerField: some View {
+        ZStack(alignment: .bottomTrailing) {
+            TextField("Message Hermes", text: $draft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(1...5)
+                .submitLabel(.send)
+                .onSubmit {
+                    if canSend {
+                        sendMessage()
+                    }
+                }
+                .padding(.vertical, 15)
+                .padding(.leading, 18)
+                .padding(.trailing, 56)
+                .focused($draftFocused)
+                .disabled(isRunning)
+
+            sendButton
+                .padding(.trailing, 8)
+                .padding(.bottom, 8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var sendButton: some View {
+        Button {
+            sendMessage()
+        } label: {
+            sendButtonLabel
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSend)
+        .accessibilityLabel("Send message")
+    }
+
+    private var sendButtonLabel: some View {
+        Image(systemName: "arrow.up")
+            .font(.system(size: 16, weight: .bold))
+            .frame(width: 36, height: 36)
+            .foregroundStyle(canSend ? .white : .secondary)
+            .background(canSend ? Color.accentColor : Color(uiColor: .tertiarySystemFill), in: Circle())
+            .overlay {
+                Circle()
+                    .strokeBorder(Color.white.opacity(canSend ? 0.24 : 0.12))
+            }
+            .ifAvailableGlass(in: Circle())
     }
 
     private var agentConfiguration: HermesAgentConfiguration {
@@ -271,64 +325,8 @@ struct ContentView: View {
         guard renderTranscript else { return }
 
         entries = ChatTranscriptFormatter.entries(from: state.currentSession)
-        timingEvents.removeAll()
         activeReasoningEntries.removeAll()
         assistantIDsWithReasoning.removeAll()
-    }
-
-    private func runProbe() {
-        let configuration = agentConfiguration
-        isRunning = true
-        append(.status, title: "Probe", body: "Starting embedded Python and Hermes...")
-
-        Task.detached {
-            let text: String
-            do {
-                let agent = try Self.makeAgent(configuration: configuration)
-                let result = try agent.probe()
-                let toolProbe = try agent.toolProbe()
-                text = """
-                PYTHON
-                \(result.python)
-
-                HERMES
-                \(result.hermes)
-
-                HERMES TOOL DISPATCH
-                \(toolProbe)
-                """
-            } catch {
-                text = String(describing: error)
-            }
-
-            Self.writeProbeOutput(text)
-
-            await MainActor.run {
-                append(.debug, title: "Probe Output", body: Self.displayPreview(text))
-                isRunning = false
-            }
-        }
-    }
-
-    private func runShellProbe() {
-        isRunning = true
-        append(.status, title: "Shell", body: "Running embedded shell smoke test...")
-
-        Task.detached {
-            let text: String
-            do {
-                text = try AgentKitISHShellEnvironment().smokeTest()
-            } catch {
-                text = String(describing: error)
-            }
-
-            Self.writeProbeOutput(text)
-
-            await MainActor.run {
-                append(.debug, title: "Shell Output", body: Self.displayPreview(text))
-                isRunning = false
-            }
-        }
     }
 
     private func sendMessage() {
@@ -339,7 +337,6 @@ struct ContentView: View {
         draftFocused = false
         append(.user, title: "You", body: userMessage)
         let assistantID = append(.assistant, title: "Hermes", body: "", isStreaming: true)
-        timingEvents[assistantID] = []
         let config = agentConfiguration
         isRunning = true
 
@@ -357,8 +354,6 @@ struct ContentView: View {
                     finishAssistant(assistantID, fallback: ChatTranscriptFormatter.finalResponse(from: result, raw: final))
                     appendFinalReasoning(result?.lastReasoning, assistantID: assistantID)
                     stopReasoningSpinner(for: assistantID)
-                    appendTimingSummary(for: assistantID)
-                    Self.writeProbeOutput(transcriptText)
                     isRunning = false
                 }
             } catch {
@@ -366,8 +361,6 @@ struct ContentView: View {
                     finishAssistant(assistantID, fallback: "")
                     stopReasoningSpinner(for: assistantID)
                     append(.error, title: "Error", body: Self.displayText(for: error))
-                    appendTimingSummary(for: assistantID)
-                    Self.writeProbeOutput(transcriptText)
                     isRunning = false
                 }
             }
@@ -418,7 +411,7 @@ struct ContentView: View {
         case "tool_progress":
             endActiveReasoningChunk(for: assistantID)
         case "timing":
-            recordTiming(event.payload, assistantID: assistantID)
+            break
         case "done":
             stopAssistantSpinner(assistantID)
             stopReasoningSpinner(for: assistantID)
@@ -479,24 +472,6 @@ struct ContentView: View {
             toolSucceeded: ok
         )
         entries.append(entry)
-    }
-
-    private func recordTiming(_ payload: String, assistantID: UUID) {
-        guard let data = payload.data(using: .utf8),
-              let timing = try? JSONDecoder().decode(TimingEvent.self, from: data)
-        else { return }
-        timingEvents[assistantID, default: []].append(timing)
-    }
-
-    private func appendTimingSummary(for assistantID: UUID) {
-        guard let timings = timingEvents.removeValue(forKey: assistantID), !timings.isEmpty else { return }
-        let body = timings
-            .map { timing in
-                let detail = timing.detail.map { " \($0)" } ?? ""
-                return "\(ChatTranscriptFormatter.formatTimingLabel(timing.label)) \(ChatTranscriptFormatter.formatElapsed(timing.elapsedMs))\(detail)"
-            }
-            .joined(separator: "\n")
-        append(.debug, title: "Timing", body: body)
     }
 
     private func appendToAssistant(_ id: UUID, text: String) {
@@ -578,46 +553,78 @@ struct ContentView: View {
         entries[index].isStreaming = false
     }
 
-    private var transcriptText: String {
-        entries.map { entry in
-            var parts = ["\(entry.title)\n\(entry.body)"]
-            if let input = entry.toolInput, !input.isEmpty {
-                parts.append("Input\n\(input)")
-            }
-            if let output = entry.toolOutput, !output.isEmpty {
-                parts.append("Output\n\(output)")
-            }
-            return parts.joined(separator: "\n\n")
-        }
-        .joined(separator: "\n\n")
-    }
-
-    nonisolated private static func writeProbeOutput(_ text: String) {
-        do {
-            let documents = try FileManager.default.url(
-                for: .documentDirectory,
-                in: .userDomainMask,
-                appropriateFor: nil,
-                create: true
-            )
-            let url = documents.appendingPathComponent("hermes-probe-output.txt")
-            try text.write(to: url, atomically: true, encoding: .utf8)
-            NSLog("Hermes probe output written to %@", url.path)
-        } catch {
-            NSLog("Failed to write Hermes probe output: %@", String(describing: error))
-        }
-    }
-
-    nonisolated private static func displayPreview(_ text: String, limit: Int = 20_000) -> String {
-        guard text.count > limit else { return text }
-        let index = text.index(text.startIndex, offsetBy: limit)
-        return String(text[..<index]) + "\n\n... truncated in UI; full output was written to hermes-probe-output.txt"
-    }
-
     nonisolated private static func displayText(for error: Error) -> String {
         if let description = (error as? LocalizedError)?.errorDescription, !description.isEmpty {
             return description
         }
         return error.localizedDescription
+    }
+}
+
+private struct EmptyChatView: View {
+    let onPromptSelected: (String) -> Void
+
+    private let prompts = [
+        "Create hello.txt and read it back.",
+        "List the workspace files.",
+        "Draft an AGENTS.md for this app sandbox.",
+    ]
+
+    var body: some View {
+        VStack(spacing: 22) {
+            VStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                Text("What should Hermes do?")
+                    .font(.title2.weight(.semibold))
+
+                Text("Start with a small workspace task.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 10) {
+                ForEach(prompts, id: \.self) { prompt in
+                    Button {
+                        onPromptSelected(prompt)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text(prompt)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.leading)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 12)
+                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(Color(uiColor: .separator).opacity(0.16))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: 430)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 40)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func ifAvailableGlass<S: Shape>(in shape: S) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular.interactive(), in: shape)
+        } else {
+            self
+        }
     }
 }

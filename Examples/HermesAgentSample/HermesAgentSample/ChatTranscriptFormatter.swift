@@ -83,14 +83,7 @@ enum ChatTranscriptFormatter {
     }
 
     static func welcomeEntries() -> [ChatEntry] {
-        [
-            ChatEntry(
-                kind: .assistant,
-                title: "Hermes",
-                body: "Ready. Configure a model and API key in settings, then send a message.",
-                isStreaming: false
-            ),
-        ]
+        []
     }
 
     static func decodeToolEvent(_ payload: String) -> ToolEvent? {
@@ -227,17 +220,6 @@ enum ChatTranscriptFormatter {
 
     static func displayToolName(_ name: String) -> String {
         name.replacingOccurrences(of: "_", with: " ")
-    }
-
-    static func formatTimingLabel(_ label: String) -> String {
-        label.replacingOccurrences(of: "_", with: " ")
-    }
-
-    static func formatElapsed(_ ms: Double) -> String {
-        if ms >= 1000 {
-            return String(format: "%.2fs", ms / 1000)
-        }
-        return "\(Int(ms.rounded()))ms"
     }
 
     private static func decodeToolArguments(_ text: String?) -> [String: JSONValue]? {
