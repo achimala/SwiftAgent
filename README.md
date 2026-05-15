@@ -151,6 +151,15 @@ xcrun simctl install booted \
 xcrun simctl launch booted com.daysail.HermesAgentSample
 ```
 
+To run on a physical device, create a private local signing config:
+
+```bash
+cp Examples/HermesAgentSample/Local.xcconfig.example \
+  Examples/HermesAgentSample/Local.xcconfig
+```
+
+Then edit `Examples/HermesAgentSample/Local.xcconfig` with your Apple development team ID and a bundle ID prefix you own. That file is ignored by git, so your personal signing identity does not get committed.
+
 In the sample app, configure an OpenAI-compatible endpoint in settings, send a message, and watch reasoning summaries, tool calls, tool output, timing, and final responses stream back into the chat.
 
 ## Current Status

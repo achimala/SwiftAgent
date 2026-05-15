@@ -3,4 +3,5 @@ Build/
 .DS_Store
 *.xcuserstate
 xcuserdata/
+Examples/HermesAgentSample/Local.xcconfig
 Vendor/ish-arm64/build*/

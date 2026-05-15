@@ -59,6 +59,8 @@
 		A51C55FA2A36CA6BDFF0E050 /* ChatTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTypes.swift; sourceTree = "<group>"; };
 		A5F99698D58C43E858FE625D /* SmokeRunners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeRunners.swift; sourceTree = "<group>"; };
 		AC2773FD3F8CF26CAC6A4481 /* HermesAgentWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesAgentWorker.swift; sourceTree = "<group>"; };
+		B04656BF7ED04584A48D1AC1 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		C775902C92FB4A5E8796D604 /* Local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig.example; sourceTree = "<group>"; };
 		D1EE402D48618F7BA41DB297 /* HermesAgentWorker.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.extensionkit-extension"; includeInIndex = 0; path = HermesAgentWorker.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA7A75ED586E43ECC7F93E0D /* SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViews.swift; sourceTree = "<group>"; };
 		DAD1741E7F1FB023E9540478 /* ChatRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRow.swift; sourceTree = "<group>"; };
@@ -122,6 +124,8 @@
 		AED6CBA19B001B636BD5C31A = {
 			isa = PBXGroup;
 			children = (
+				C775902C92FB4A5E8796D604 /* Local.xcconfig.example */,
+				B04656BF7ED04584A48D1AC1 /* Signing.xcconfig */,
 				8452D9C7C48291C894DCD08E /* HermesAgentSample */,
 				09F5F2BBEABBBE1275BDC707 /* HermesAgentWorker */,
 				B07D4CA284835EFEDC76766A /* Packages */,
@@ -312,6 +316,7 @@
 /* Begin XCBuildConfiguration section */
 		2A470918465CE33C51BC52CF /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B04656BF7ED04584A48D1AC1 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -345,7 +350,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -376,6 +381,7 @@
 		};
 		3B790A60DB33D400CBF654F8 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B04656BF7ED04584A48D1AC1 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -409,7 +415,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -433,7 +439,9 @@
 		};
 		579E451F4B5E7E23D6AC77A3 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B04656BF7ED04584A48D1AC1 /* Signing.xcconfig */;
 			buildSettings = {
+				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = HermesAgentWorker/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -441,7 +449,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.daysail.HermesAgentSample.HermesAgentWorker;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample.HermesAgentWorker";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -449,9 +457,11 @@
 		};
 		7B753592426834B09EECA3D8 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B04656BF7ED04584A48D1AC1 /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				EX_ENABLE_EXTENSION_POINT_GENERATION = YES;
@@ -460,7 +470,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.daysail.HermesAgentSample;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -468,7 +478,9 @@
 		};
 		B5BA2C068B296CF837BE13AE /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B04656BF7ED04584A48D1AC1 /* Signing.xcconfig */;
 			buildSettings = {
+				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = HermesAgentWorker/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -476,7 +488,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.daysail.HermesAgentSample.HermesAgentWorker;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample.HermesAgentWorker";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -484,9 +496,11 @@
 		};
 		E1DD6C9BA8F52962E166CBDE /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B04656BF7ED04584A48D1AC1 /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				EX_ENABLE_EXTENSION_POINT_GENERATION = YES;
@@ -495,7 +509,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.daysail.HermesAgentSample;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

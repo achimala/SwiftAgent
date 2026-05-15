@@ -1,0 +1,5 @@
+// Copy this file to Local.xcconfig to run the sample app on a physical device.
+// Local.xcconfig is ignored by git so your Apple team ID and bundle prefix stay private.
+
+AGENTKIT_SAMPLE_DEVELOPMENT_TEAM = YOURTEAMID
+AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX = com.yourname.AgentKitSample

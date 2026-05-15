@@ -1,0 +1,4 @@
+AGENTKIT_SAMPLE_DEVELOPMENT_TEAM =
+AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX = com.daysail
+
+#include? "Local.xcconfig"
