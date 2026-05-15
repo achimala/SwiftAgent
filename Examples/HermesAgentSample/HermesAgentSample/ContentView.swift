@@ -323,9 +323,6 @@ struct ContentView: View {
             appendToAssistant(assistantID, text: event.payload)
         case "interim":
             append(.assistant, title: "Hermes", body: event.payload)
-        case "status":
-            append(.status, title: "Status", body: event.payload)
-            moveEmptyAssistantToEnd(assistantID)
         case "tool_gen":
             if let tool = decodeToolEvent(event.payload) {
                 append(.tool, title: "Preparing \(tool.name ?? "tool")", body: "Generating arguments...")

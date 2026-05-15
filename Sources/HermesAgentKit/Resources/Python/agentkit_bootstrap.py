@@ -424,7 +424,6 @@ def hermes_chat(message):
         agent.tool_gen_callback = on_tool_gen
         agent.interim_assistant_callback = on_interim
 
-        _emit_stream("status", "sending")
         result = agent.run_conversation(message, stream_callback=on_delta)
         _emit_stream("done", "")
         return json.dumps(
