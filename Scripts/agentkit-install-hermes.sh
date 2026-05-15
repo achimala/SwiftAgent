@@ -103,6 +103,10 @@ fi
 export EXPANDED_CODE_SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
 export EXPANDED_CODE_SIGN_IDENTITY_NAME="${EXPANDED_CODE_SIGN_IDENTITY_NAME:-Sign to Run Locally}"
 export ARCHS="${ARCHS:-${NATIVE_ARCH_ACTUAL:-$(uname -m)}}"
+if [ -z "${PRODUCT_BUNDLE_IDENTIFIER:-}" ] && [ -f "$CODESIGNING_FOLDER_PATH/Info.plist" ]; then
+  PRODUCT_BUNDLE_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$CODESIGNING_FOLDER_PATH/Info.plist" 2>/dev/null || true)"
+fi
+export PRODUCT_BUNDLE_IDENTIFIER="${PRODUCT_BUNDLE_IDENTIFIER:-com.agentkit.bundle}"
 
 ORIGINAL_PROJECT_DIR="${PROJECT_DIR:-}"
 PROJECT_DIR="$(cd "$(dirname "$PYTHON_XCFRAMEWORK")" && pwd -P)"
