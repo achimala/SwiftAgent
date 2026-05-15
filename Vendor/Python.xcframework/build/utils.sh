@@ -116,6 +116,7 @@ install_dylib () {
         echo "Creating framework for $RELATIVE_EXT"
         mkdir -p "$CODESIGNING_FOLDER_PATH/$FRAMEWORK_FOLDER"
         cp "$PROJECT_DIR/$PYTHON_XCFRAMEWORK_PATH/build/$PLATFORM_FAMILY_NAME-dylib-Info-template.plist" "$CODESIGNING_FOLDER_PATH/$FRAMEWORK_FOLDER/Info.plist"
+        chmod u+w "$CODESIGNING_FOLDER_PATH/$FRAMEWORK_FOLDER/Info.plist"
         plutil -replace CFBundleExecutable -string "$FULL_MODULE_NAME" "$CODESIGNING_FOLDER_PATH/$FRAMEWORK_FOLDER/Info.plist"
         plutil -replace CFBundleIdentifier -string "$FRAMEWORK_BUNDLE_ID" "$CODESIGNING_FOLDER_PATH/$FRAMEWORK_FOLDER/Info.plist"
     fi
