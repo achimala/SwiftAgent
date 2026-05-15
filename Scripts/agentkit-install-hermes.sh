@@ -18,10 +18,10 @@ PYTHON_APP_SOURCE="${AGENTKIT_PYTHON_APP_SOURCE:-}"
 if [ -z "$PYTHON_APP_SOURCE" ]; then
   if [ -n "${PROJECT_DIR:-}" ] && [ -d "$PROJECT_DIR/PythonApp" ]; then
     PYTHON_APP_SOURCE="$PROJECT_DIR/PythonApp"
-  elif [ -n "${PROJECT_DIR:-}" ] && [ -d "$PROJECT_DIR/HermesAgentSample/PythonApp" ]; then
-    PYTHON_APP_SOURCE="$PROJECT_DIR/HermesAgentSample/PythonApp"
+  elif [ -d "$AGENTKIT_PACKAGE_DIR/Payloads/Hermes/PythonApp" ]; then
+    PYTHON_APP_SOURCE="$AGENTKIT_PACKAGE_DIR/Payloads/Hermes/PythonApp"
   else
-    PYTHON_APP_SOURCE="$AGENTKIT_PACKAGE_DIR/Examples/HermesAgentSample/HermesAgentSample/PythonApp"
+    PYTHON_APP_SOURCE="$AGENTKIT_PACKAGE_DIR/Payloads/Hermes/PythonApp"
   fi
 fi
 
@@ -30,6 +30,13 @@ PYTHON_XCFRAMEWORK="${AGENTKIT_PYTHON_XCFRAMEWORK:-$AGENTKIT_PACKAGE_DIR/Vendor/
 if [ ! -d "$PYTHON_APP_SOURCE" ]; then
   echo "AgentKit Python app payload was not found at: $PYTHON_APP_SOURCE"
   echo "Set AGENTKIT_PYTHON_APP_SOURCE to a directory containing hermes, site-packages, and platform package overlays."
+  echo "For AgentKit development, run: Scripts/update-hermes.sh"
+  exit 1
+fi
+
+if [ ! -d "$PYTHON_APP_SOURCE/hermes" ]; then
+  echo "AgentKit Hermes source was not found at: $PYTHON_APP_SOURCE/hermes"
+  echo "Run Scripts/update-hermes.sh or set AGENTKIT_PYTHON_APP_SOURCE to a complete PythonApp payload."
   exit 1
 fi
 

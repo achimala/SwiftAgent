@@ -7,10 +7,13 @@ This document collects the lower-level architecture, packaging, and boundary not
 - `Vendor/Python.xcframework`: BeeWare Python 3.14 for iOS.
 - `Vendor/AgentKitISH.xcframework`: a local iSH ARM64 static XCFramework for the embedded Linux-like shell backend.
 - `Vendor/ish-arm64`: vendored GPLv3 iSH ARM64 source plus AgentKit embedding patches.
+- `Vendor/hermes-agent.lock`: the reviewed upstream Hermes release pin.
+- `Payloads/Hermes/PythonApp`: the canonical checked-in Python payload copied into app and extension bundles.
 - `Sources/CHermesPython`: a C bridge around `PyConfig`, Python evaluation, and Hermes callback plumbing.
 - `Sources/AgentKitCore`: the lightweight protocol/path layer and test doubles.
 - `Sources/AgentKit`: the batteries-included iOS POC target that re-exports `AgentKitCore` and includes Hermes, iSH shell, iOS shell, and MLX providers.
-- `Examples/HermesAgentSample`: an iOS app that bundles Hermes source plus vendored Python dependencies.
+- `Examples/HermesAgentSample`: an iOS app that consumes the canonical AgentKit Hermes payload through the build script.
+- `Scripts/update-hermes.sh`: fetches the pinned upstream Hermes release and stages it into `Payloads/Hermes/PythonApp/hermes`.
 - `Scripts/build-native-wheels.sh`: a reproducible recipe for rebuilding the Rust-backed iOS wheels used by OpenAI/Pydantic.
 - `Scripts/agentkit-scaffold-worker-extension.sh` and `Templates/AgentKitWorkerExtension`: boilerplate for adding the out-of-process AgentKit worker extension to a host app.
 
@@ -70,7 +73,7 @@ set -euo pipefail
 
 The script copies the Hermes Python payload into the final app bundle, overlays the platform-specific Python packages, and runs BeeWare's `install_python` helper to copy the Python standard library and convert `.so` extension modules into signed app frameworks.
 
-By default the script uses the checked-in sample payload at `Examples/HermesAgentSample/HermesAgentSample/PythonApp`. Apps can set `AGENTKIT_PYTHON_APP_SOURCE` to their own payload directory and `AGENTKIT_PYTHON_XCFRAMEWORK` to a custom Python framework path.
+By default the script uses the canonical checked-in payload at `Payloads/Hermes/PythonApp`. Apps can set `AGENTKIT_PYTHON_APP_SOURCE` to their own payload directory and `AGENTKIT_PYTHON_XCFRAMEWORK` to a custom Python framework path.
 
 Third-party Python packages are staged with this layout:
 
@@ -80,6 +83,26 @@ Third-party Python packages are staged with this layout:
 
 SwiftPM cannot silently add this final app-bundle processing step to a consuming iOS app, so a small explicit Run Script phase is still required for the Python/Hermes backend. The app-facing Swift code stays at `import AgentKit`.
 
+## Updating Hermes
+
+Hermes is intentionally not a Git submodule and is not fetched during normal Xcode builds. Submodules make SPM checkouts and app CI more fragile, and fetching from a build phase would make app builds non-deterministic and network-dependent.
+
+The source pin lives in `Vendor/hermes-agent.lock`:
+
+- `HERMES_REPOSITORY`: upstream Git repository.
+- `HERMES_TAG`: reviewed upstream release tag.
+- `HERMES_VERSION`: expected Python package version.
+- `HERMES_COMMIT`: peeled release-tag commit.
+
+To update Hermes:
+
+1. Review the upstream release.
+2. Update `Vendor/hermes-agent.lock` to the new tag/version/commit.
+3. Run `./Scripts/update-hermes.sh`.
+4. Run the host tests and simulator build.
+
+`Scripts/update-hermes.sh` fetches the tagged source into `Build/hermes-agent-src`, verifies that the tag resolves to the pinned commit, verifies `pyproject.toml` matches the pinned version, and replaces only `Payloads/Hermes/PythonApp/hermes`. It stages runtime-relevant Hermes files while excluding obvious upstream repo furniture like CI config, Docker/Nix files, tests, website docs, and release-note archives. It leaves the pure-Python and platform-native dependency layers in place.
+
 ## Rebuilding Native Wheels
 
 The native wheels currently needed for OpenAI/Pydantic are `jiter==0.13.0` and `pydantic_core==2.41.5`.
@@ -88,7 +111,7 @@ The native wheels currently needed for OpenAI/Pydantic are `jiter==0.13.0` and `
 ./Scripts/build-native-wheels.sh
 ```
 
-That builds simulator and device wheels into `Build/wheelhouse`. Updating the checked-in sample package layers still needs a vendor step: unzip the `iphonesimulator` wheels into `Examples/HermesAgentSample/HermesAgentSample/PythonApp/site-packages-iphonesimulator` and the `iphoneos` wheels into `Examples/HermesAgentSample/HermesAgentSample/PythonApp/site-packages-iphoneos`.
+That builds simulator and device wheels into `Build/wheelhouse`. Updating the checked-in package layers still needs a vendor step: unzip the `iphonesimulator` wheels into `Payloads/Hermes/PythonApp/site-packages-iphonesimulator` and the `iphoneos` wheels into `Payloads/Hermes/PythonApp/site-packages-iphoneos`.
 
 ## iSH Shell Backend
 

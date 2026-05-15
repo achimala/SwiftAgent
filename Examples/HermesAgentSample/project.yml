@@ -16,11 +16,7 @@ targets:
     platform: iOS
     sources:
       - path: HermesAgentSample
-        excludes:
-          - PythonApp
     resources:
-      - path: HermesAgentSample/PythonApp
-        type: folder
       - path: HermesAgentSample/commandDictionary.plist
     dependencies:
       - package: AgentKit
