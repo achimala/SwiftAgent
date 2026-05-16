@@ -99,16 +99,16 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
     #endif
 
     public func prepare(sourceURL: URL) throws -> String {
-        try perform { service in
-            try callString { reply in
+        try perform { service, monitor in
+            try callString(monitor: monitor) { reply in
                 service.prepare(sourcePath: sourceURL.path, withReply: reply)
             }
         }
     }
 
     public func probe(sourceURL: URL) throws -> HermesProbeResult {
-        try perform { service in
-            let dictionary = try callDictionary { reply in
+        try perform { service, monitor in
+            let dictionary = try callDictionary(monitor: monitor) { reply in
                 service.probe(sourcePath: sourceURL.path, withReply: reply)
             }
             return HermesProbeResult(
@@ -119,8 +119,8 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
     }
 
     public func toolProbe(sourceURL: URL) throws -> String {
-        try perform { service in
-            try callString { reply in
+        try perform { service, monitor in
+            try callString(monitor: monitor) { reply in
                 service.toolProbe(sourcePath: sourceURL.path, withReply: reply)
             }
         }
@@ -132,8 +132,8 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
         sourceURL: URL,
         onEvent: @escaping @Sendable (SwiftAgentEvent) -> Void
     ) throws -> String {
-        try perform(eventHandler: onEvent) { service in
-            try callString(timeout: 600) { reply in
+        try perform(eventHandler: onEvent) { service, monitor in
+            try callString(timeout: 600, monitor: monitor) { reply in
                 service.send(
                     message: message,
                     configuration: configuration.xpcDictionary,
@@ -146,8 +146,8 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
 
     public func sessionState(sourceURL: URL) throws -> HermesSessionState {
         try decodeSessionState(
-            try perform { service in
-                try callString { reply in
+            try perform { service, monitor in
+                try callString(monitor: monitor) { reply in
                     service.sessionState(sourcePath: sourceURL.path, withReply: reply)
                 }
             }
@@ -156,8 +156,8 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
 
     public func loadSession(_ sessionID: String, sourceURL: URL) throws -> HermesSessionState {
         try decodeSessionState(
-            try perform { service in
-                try callString { reply in
+            try perform { service, monitor in
+                try callString(monitor: monitor) { reply in
                     service.loadSession(sessionID, sourcePath: sourceURL.path, withReply: reply)
                 }
             }
@@ -166,8 +166,8 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
 
     public func newSession(sourceURL: URL) throws -> HermesSessionState {
         try decodeSessionState(
-            try perform { service in
-                try callString { reply in
+            try perform { service, monitor in
+                try callString(monitor: monitor) { reply in
                     service.newSession(sourcePath: sourceURL.path, withReply: reply)
                 }
             }
@@ -176,7 +176,7 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
 
     private func perform<T>(
         eventHandler: (@Sendable (SwiftAgentEvent) -> Void)? = nil,
-        _ operation: (SwiftAgentHermesXPCServiceProtocol) throws -> T
+        _ operation: (SwiftAgentHermesXPCServiceProtocol, HermesXPCRequestMonitor) throws -> T
     ) throws -> T {
         guard let client else {
             throw unavailable()
@@ -184,11 +184,14 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
 
         lock.lock()
         defer { lock.unlock() }
-        return try operation(try client.service(eventHandler: eventHandler))
+        let monitor = HermesXPCRequestMonitor()
+        defer { monitor.cancel() }
+        return try operation(try client.service(eventHandler: eventHandler, requestMonitor: monitor), monitor)
     }
 
     private func callString(
         timeout: TimeInterval = 120,
+        monitor: HermesXPCRequestMonitor,
         _ invoke: (@escaping (String?, String?) -> Void) -> Void
     ) throws -> String {
         let semaphore = DispatchSemaphore(value: 0)
@@ -197,6 +200,12 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
             var error: String?
         }
         let box = Box()
+
+        monitor.setFailureHandler { error in
+            box.error = error
+            semaphore.signal()
+        }
+        defer { monitor.setFailureHandler(nil) }
 
         invoke { value, error in
             box.value = value
@@ -215,6 +224,7 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
 
     private func callDictionary(
         timeout: TimeInterval = 120,
+        monitor: HermesXPCRequestMonitor,
         _ invoke: (@escaping (NSDictionary?, String?) -> Void) -> Void
     ) throws -> NSDictionary {
         let semaphore = DispatchSemaphore(value: 0)
@@ -223,6 +233,12 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
             var error: String?
         }
         let box = Box()
+
+        monitor.setFailureHandler { error in
+            box.error = error
+            semaphore.signal()
+        }
+        defer { monitor.setFailureHandler(nil) }
 
         invoke { value, error in
             box.value = value
@@ -256,18 +272,76 @@ public final class HermesExtensionProcessBackend: HermesAgentBackend, @unchecked
 
 private protocol HermesExtensionXPCClient: Sendable {
     func service(
-        eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?
+        eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?,
+        requestMonitor: HermesXPCRequestMonitor
     ) throws -> SwiftAgentHermesXPCServiceProtocol
 }
 
+private final class HermesXPCRequestMonitor: @unchecked Sendable {
+    private let lock = NSLock()
+    private var failureHandler: ((String) -> Void)?
+    private var pendingError: String?
+    private var isCancelled = false
+
+    func setFailureHandler(_ handler: ((String) -> Void)?) {
+        lock.lock()
+        if isCancelled {
+            lock.unlock()
+            return
+        }
+        failureHandler = handler
+        let pendingError = pendingError
+        self.pendingError = nil
+        lock.unlock()
+
+        if let pendingError, let handler {
+            handler(pendingError)
+        }
+    }
+
+    func fail(_ error: String) {
+        lock.lock()
+        guard !isCancelled else {
+            lock.unlock()
+            return
+        }
+        if let failureHandler {
+            self.failureHandler = nil
+            lock.unlock()
+            failureHandler(error)
+            return
+        }
+        pendingError = error
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        isCancelled = true
+        failureHandler = nil
+        pendingError = nil
+        lock.unlock()
+    }
+}
+
 private final class SwiftAgentHermesXPCEventSink: NSObject, SwiftAgentHermesXPCEventSinkProtocol {
-    private let eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?
+    private let lock = NSLock()
+    private var eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?
 
     init(eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?) {
         self.eventHandler = eventHandler
     }
 
+    func update(eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?) {
+        lock.lock()
+        self.eventHandler = eventHandler
+        lock.unlock()
+    }
+
     func swiftAgentHermesDidEmitEvent(kind: String, payload: String) {
+        lock.lock()
+        let eventHandler = eventHandler
+        lock.unlock()
         eventHandler?(SwiftAgentEvent(kind: kind, payload: payload))
     }
 }
@@ -276,20 +350,25 @@ private final class SwiftAgentHermesXPCEventSink: NSObject, SwiftAgentHermesXPCE
 @available(iOS 26.0, *)
 private final class ExtensionFoundationHermesXPCClient: HermesExtensionXPCClient, @unchecked Sendable {
     private let appExtensionPoint: AppExtensionPoint
+    private let monitorLock = NSLock()
     private var process: AppExtensionProcess?
     private var connection: NSXPCConnection?
     private var eventSink: SwiftAgentHermesXPCEventSink?
+    private var requestMonitor: HermesXPCRequestMonitor?
 
     init(appExtensionPoint: AppExtensionPoint) {
         self.appExtensionPoint = appExtensionPoint
     }
 
     func service(
-        eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?
+        eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?,
+        requestMonitor: HermesXPCRequestMonitor
     ) throws -> SwiftAgentHermesXPCServiceProtocol {
-        let connection = try connection(eventHandler: eventHandler)
+        update(requestMonitor: requestMonitor)
+        let connection = try connection(eventHandler: eventHandler, requestMonitor: requestMonitor)
         guard let service = connection.remoteObjectProxyWithErrorHandler({ error in
             NSLog("SwiftAgent Hermes XPC service error: %@", String(describing: error))
+            requestMonitor.fail("Hermes extension XPC service error: \(error.localizedDescription)")
         }) as? SwiftAgentHermesXPCServiceProtocol else {
             throw HermesAgentError.python("Unable to create Hermes extension XPC proxy.")
         }
@@ -297,11 +376,11 @@ private final class ExtensionFoundationHermesXPCClient: HermesExtensionXPCClient
     }
 
     private func connection(
-        eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?
+        eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?,
+        requestMonitor: HermesXPCRequestMonitor
     ) throws -> NSXPCConnection {
         if let connection {
-            eventSink = SwiftAgentHermesXPCEventSink(eventHandler: eventHandler)
-            connection.exportedObject = eventSink
+            eventSink?.update(eventHandler: eventHandler)
             return connection
         }
 
@@ -319,11 +398,30 @@ private final class ExtensionFoundationHermesXPCClient: HermesExtensionXPCClient
         createdConnection.remoteObjectInterface = SwiftAgentHermesXPC.serviceInterface()
         createdConnection.exportedInterface = SwiftAgentHermesXPC.eventSinkInterface()
         createdConnection.exportedObject = eventSink
+        createdConnection.interruptionHandler = { [weak self] in
+            self?.failCurrentRequest("Hermes extension process interrupted.")
+        }
+        createdConnection.invalidationHandler = { [weak self] in
+            self?.failCurrentRequest("Hermes extension XPC connection invalidated.")
+        }
         createdConnection.resume()
 
         process = createdProcess
         connection = createdConnection
         return createdConnection
+    }
+
+    private func update(requestMonitor: HermesXPCRequestMonitor?) {
+        monitorLock.lock()
+        self.requestMonitor = requestMonitor
+        monitorLock.unlock()
+    }
+
+    private func failCurrentRequest(_ error: String) {
+        monitorLock.lock()
+        let requestMonitor = requestMonitor
+        monitorLock.unlock()
+        requestMonitor?.fail(error)
     }
 
     private func discoverIdentity() throws -> AppExtensionIdentity {
