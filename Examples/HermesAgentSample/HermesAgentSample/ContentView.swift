@@ -15,6 +15,7 @@ struct ContentView: View {
     @AppStorage("hermes.enableContext") private var enableContext = true
     @AppStorage("hermes.enableMemory") private var enableMemory = true
 
+    @State private var chatGPTTokens: HermesChatGPTTokenResponse?
     @State private var draft = ""
     @State private var entries: [ChatEntry] = ChatTranscriptFormatter.welcomeEntries()
     @State private var isRunning = false
@@ -76,6 +77,7 @@ struct ContentView: View {
             }
             .task {
                 loadCurrentSession()
+                loadChatGPTTokens()
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView(
@@ -83,6 +85,7 @@ struct ContentView: View {
                     baseURL: $baseURL,
                     apiKey: $apiKey,
                     model: $model,
+                    chatGPTTokens: $chatGPTTokens,
                     mlxModel: $mlxModel,
                     mlxMaxTokens: $mlxMaxTokens,
                     mlxTemperature: $mlxTemperature,
@@ -146,7 +149,14 @@ struct ContentView: View {
     }
 
     private var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isRunning
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isRunning && providerIsConfigured
+    }
+
+    private var providerIsConfigured: Bool {
+        if usesChatGPTCodex {
+            return !(chatGPTTokens?.accessToken ?? "").isEmpty
+        }
+        return true
     }
 
     @ViewBuilder
@@ -247,6 +257,16 @@ struct ContentView: View {
             )
         }
 
+        if usesChatGPTCodex {
+            return .chatGPTCodex(
+                accessToken: chatGPTTokens?.accessToken ?? "",
+                model: model,
+                enableSoul: enableSoul,
+                enableContext: enableContext,
+                enableMemory: enableMemory
+            )
+        }
+
         return .openAI(
             apiKey: apiKey,
             model: model,
@@ -263,6 +283,14 @@ struct ContentView: View {
 
     private var usesFoundationModels: Bool {
         provider == "foundation"
+    }
+
+    private var usesChatGPTCodex: Bool {
+        provider == "chatgpt"
+    }
+
+    private func loadChatGPTTokens() {
+        chatGPTTokens = try? HermesChatGPTKeychainTokenStore().loadTokens()
     }
 
     nonisolated private static func makeAgent(configuration: HermesAgentConfiguration, provider: String) throws -> HermesAgent {

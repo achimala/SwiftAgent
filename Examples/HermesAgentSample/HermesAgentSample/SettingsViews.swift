@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Binding var baseURL: String
     @Binding var apiKey: String
     @Binding var model: String
+    @Binding var chatGPTTokens: HermesChatGPTTokenResponse?
     @Binding var mlxModel: String
     @Binding var mlxMaxTokens: Int
     @Binding var mlxTemperature: Double
@@ -16,6 +17,7 @@ struct SettingsView: View {
     @Binding var enableMemory: Bool
 
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var chatGPTSignInState = HermesChatGPTSignInState()
 
     private var hermesHome: URL? {
         try? HermesAgent.defaultHome()
@@ -30,14 +32,47 @@ struct SettingsView: View {
             Form {
                 Section("Provider") {
                     Picker("Provider", selection: $provider) {
-                        Text("Hosted").tag("hermes")
+                        Text("API").tag("hermes")
+                        Text("ChatGPT").tag("chatgpt")
                         Text("Offline MLX").tag("mlx")
                         Text("Apple").tag("foundation")
                     }
                     .pickerStyle(.segmented)
                 }
 
-                Section("Connection") {
+                if provider == "chatgpt" {
+                    Section("ChatGPT") {
+                        if chatGPTTokens == nil {
+                            HermesChatGPTSignInButton(state: chatGPTSignInState) { tokens in
+                                chatGPTTokens = tokens
+                                baseURL = HermesChatGPTAuthConstants.codexBaseURL
+                                if model == "gpt-4.1-mini" || model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    model = "gpt-5.3-codex"
+                                }
+                            }
+                        } else {
+                            Label("Signed in", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+
+                            Button(role: .destructive) {
+                                do {
+                                    try chatGPTSignInState.signOut()
+                                    chatGPTTokens = nil
+                                } catch {
+                                    chatGPTTokens = nil
+                                }
+                            } label: {
+                                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                            }
+                        }
+
+                        TextField("Model", text: $model)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                }
+
+                Section("API Connection") {
                     TextField("Base URL", text: $baseURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
