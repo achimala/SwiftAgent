@@ -77,6 +77,30 @@ let response = try agent.send("Create hello.txt and read it back") { event in
 }
 ```
 
+To let a host app use the user's ChatGPT/Codex subscription, embed the package-provided sign-in button and keep the returned tokens in the default Keychain store:
+
+```swift
+import SwiftAgent
+import SwiftUI
+
+struct AgentSettings: View {
+    @State private var tokens: HermesChatGPTTokenResponse?
+
+    var body: some View {
+        HermesChatGPTSignInButton { signedInTokens in
+            tokens = signedInTokens
+        }
+    }
+}
+
+if let tokens {
+    let configuration = HermesAgentConfiguration.chatGPTCodex(
+        accessToken: tokens.accessToken,
+        model: "gpt-5.3-codex"
+    )
+}
+```
+
 Session management is available on the same facade:
 
 ```swift
