@@ -288,14 +288,6 @@ struct ContentView: View {
             )
         }
 
-        if #available(iOS 26.0, *) {
-            return try HermesAgent(
-                configuration: configuration,
-                sourceURL: HermesAgent.bundledSourceURL(),
-                backend: HermesExtensionProcessBackend(appExtensionPoint: .swiftAgentWorker)
-            )
-        }
-
         return try HermesAgent(configuration: configuration)
     }
 

@@ -4,7 +4,7 @@ SwiftAgent is a Swift package for embedding an AI agent inside an iOS app.
 
 The current implementation ships Hermes as the first supported agent runtime. It embeds CPython, bundles Hermes and its Python dependencies, streams agent events back to SwiftUI, and gives the agent a useful iOS-safe workspace with file tools and an embedded iSH shell.
 
-On iOS 26+, SwiftAgent can run the agent out of process in an ExtensionKit worker, so Hermes, Python, iSH, and native Python dependencies are isolated from the host app process.
+SwiftAgent runs Hermes in process by default. An experimental iOS 26+ ExtensionKit backend is included for out-of-process isolation work, but it is not the recommended default yet.
 
 <img src="docs/assets/swiftagent-sample.png" alt="Hermes running in the SwiftAgent sample app" width="420">
 
@@ -12,7 +12,7 @@ On iOS 26+, SwiftAgent can run the agent out of process in an ExtensionKit worke
 
 - A high-level Swift API for creating an agent, sending messages, streaming events, and managing sessions.
 - A sample iOS chat app that looks and behaves like a small agent client.
-- Out-of-process execution on iOS 26+ via ExtensionKit and XPC.
+- Experimental out-of-process execution on iOS 26+ via ExtensionKit and XPC.
 - Embedded Python and Hermes packaging helpers.
 - iSH-backed shell commands inside an app workspace.
 - File read/write tools that work across the iOS host filesystem and the iSH workspace.
@@ -64,9 +64,9 @@ Fresh checkouts fetch the pinned Hermes source on the first build. To prefetch e
 
 Set `SWIFTAGENT_AUTO_FETCH_HERMES=NO` in the build phase environment if CI should fail instead of fetching when the local Hermes payload is missing.
 
-## Recommended: Add The Worker Extension
+## Optional: Add The Experimental Worker Extension
 
-For iOS 26+, add an ExtensionKit worker so the agent runs outside your app process.
+SwiftAgent's normal `HermesAgent(configuration:)` path runs in process. The iOS 26+ ExtensionKit worker is available for experimentation, but full Hermes currently needs more memory profiling and slimming before this should be used as the default path in production apps.
 
 1. Add an ExtensionKit extension target to your app.
 
@@ -107,17 +107,7 @@ let configuration = HermesAgentConfiguration.openAI(
     model: "gpt-4.1-mini"
 )
 
-let agent: HermesAgent
-if #available(iOS 26.0, *) {
-    agent = try HermesAgent(
-        configuration: configuration,
-        sourceURL: HermesAgent.bundledSourceURL(),
-        backend: HermesExtensionProcessBackend(appExtensionPoint: .swiftAgentWorker)
-    )
-} else {
-    agent = try HermesAgent(configuration: configuration)
-}
-
+let agent = try HermesAgent(configuration: configuration)
 let response = try agent.send("Create hello.txt and read it back") { event in
     print(event.kind, event.payload)
 }
@@ -196,7 +186,8 @@ In the sample app, configure an OpenAI-compatible endpoint in settings, send a m
 Verified in simulator and generic iOS builds:
 
 - Hermes initializes inside the iOS app bundle.
-- The ExtensionKit backend runs Hermes out of process on iOS 26+.
+- Hermes runs in process by default.
+- The ExtensionKit backend is available as an experimental opt-in for out-of-process work on iOS 26+.
 - Terminal calls run through a persistent iSH ARM64 Alpine shell.
 - File read/write tools work in the SwiftAgent workspace.
 - Hermes memory, context, and soul can persist under Application Support.

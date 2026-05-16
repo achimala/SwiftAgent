@@ -15,6 +15,7 @@ enum SampleSmokeRunners {
         await HermesFoundationModelsSmokeRunner.runIfRequested()
         await HermesFoundationModelsToolSmokeRunner.runIfRequested()
         await SwiftAgentISHSmokeRunner.runIfRequested()
+        await HermesOpenAISmokeRunner.runIfRequested()
         await HermesExtensionProbeSmokeRunner.runIfRequested()
     }
 }
@@ -311,6 +312,87 @@ private enum SwiftAgentISHSmokeRunner {
                 cwd: workspace
             )
             await recorder.write("second status=\(second.status) output=\(second.output)")
+            await recorder.write("done ok")
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            await recorder.write("done error=\(message)")
+        }
+    }
+}
+
+private enum HermesOpenAISmokeRunner {
+    private static let argument = "--hermes-openai-smoke"
+
+    static func runIfRequested() async {
+        guard ProcessInfo.processInfo.arguments.contains(argument) else { return }
+
+        let recorder = SmokeRecorder(filename: "hermes-openai-smoke.log")
+        await recorder.write("start")
+
+        do {
+            guard #available(iOS 26.0, *) else {
+                await recorder.write("done skipped=requires-ios-26")
+                return
+            }
+
+            let defaults = UserDefaults.standard
+            let environment = ProcessInfo.processInfo.environment
+            let apiKey = environment["SWIFTAGENT_OPENAI_SMOKE_API_KEY"]
+                ?? environment["OPENAI_API_KEY"]
+                ?? defaults.string(forKey: "hermes.apiKey")
+                ?? ""
+            let baseURL = environment["SWIFTAGENT_OPENAI_SMOKE_BASE_URL"]
+                ?? defaults.string(forKey: "hermes.baseURL")
+                ?? "https://api.openai.com/v1"
+            let model = environment["SWIFTAGENT_OPENAI_SMOKE_MODEL"]
+                ?? defaults.string(forKey: "hermes.model")
+                ?? "gpt-4.1-mini"
+            func boolSetting(_ environmentKey: String, _ defaultsKey: String, default defaultValue: Bool) -> Bool {
+                if let raw = environment[environmentKey]?.lowercased() {
+                    return ["1", "true", "yes", "on"].contains(raw)
+                }
+                return defaults.object(forKey: defaultsKey) as? Bool ?? defaultValue
+            }
+
+            let enableSoul = boolSetting("SWIFTAGENT_OPENAI_SMOKE_ENABLE_SOUL", "hermes.enableSoul", default: true)
+            let enableContext = boolSetting("SWIFTAGENT_OPENAI_SMOKE_ENABLE_CONTEXT", "hermes.enableContext", default: true)
+            let enableMemory = boolSetting("SWIFTAGENT_OPENAI_SMOKE_ENABLE_MEMORY", "hermes.enableMemory", default: true)
+
+            await recorder.write(
+                "configuration baseURL=\(baseURL) model=\(model) keyAvailable=\(!apiKey.isEmpty) soul=\(enableSoul) context=\(enableContext) memory=\(enableMemory)"
+            )
+            guard !apiKey.isEmpty else {
+                await recorder.write("done error=missing-api-key")
+                return
+            }
+
+            let configuration = HermesAgentConfiguration.openAI(
+                apiKey: apiKey,
+                model: model,
+                baseURL: baseURL,
+                enableSoul: enableSoul,
+                enableContext: enableContext,
+                enableMemory: enableMemory
+            )
+            let backend = environment["SWIFTAGENT_OPENAI_SMOKE_BACKEND"] ?? "in-process"
+            let agent: HermesAgent
+            if backend == "extension" {
+                await recorder.write("backend=extension")
+                agent = try HermesAgent(
+                    configuration: configuration,
+                    sourceURL: HermesAgent.bundledSourceURL(),
+                    backend: HermesExtensionProcessBackend(appExtensionPoint: .swiftAgentWorker)
+                )
+            } else {
+                await recorder.write("backend=in-process")
+                agent = try HermesAgent(configuration: configuration)
+            }
+            let result = try agent.send("Reply exactly: SwiftAgent OpenAI extension smoke ok") { event in
+                Task {
+                    await recorder.write("event kind=\(event.kind) payload=\(event.payload)")
+                }
+            }
+            await recorder.write("result \(result)")
             await recorder.write("done ok")
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
