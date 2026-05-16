@@ -261,13 +261,23 @@ private protocol HermesExtensionXPCClient: Sendable {
 }
 
 private final class SwiftAgentHermesXPCEventSink: NSObject, SwiftAgentHermesXPCEventSinkProtocol {
-    private let eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?
+    private let lock = NSLock()
+    private var eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?
 
     init(eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?) {
         self.eventHandler = eventHandler
     }
 
+    func update(eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?) {
+        lock.lock()
+        self.eventHandler = eventHandler
+        lock.unlock()
+    }
+
     func swiftAgentHermesDidEmitEvent(kind: String, payload: String) {
+        lock.lock()
+        let eventHandler = eventHandler
+        lock.unlock()
         eventHandler?(SwiftAgentEvent(kind: kind, payload: payload))
     }
 }
@@ -300,8 +310,7 @@ private final class ExtensionFoundationHermesXPCClient: HermesExtensionXPCClient
         eventHandler: (@Sendable (SwiftAgentEvent) -> Void)?
     ) throws -> NSXPCConnection {
         if let connection {
-            eventSink = SwiftAgentHermesXPCEventSink(eventHandler: eventHandler)
-            connection.exportedObject = eventSink
+            eventSink?.update(eventHandler: eventHandler)
             return connection
         }
 
