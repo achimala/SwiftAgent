@@ -74,7 +74,7 @@ set -euo pipefail
 "$PROJECT_DIR/../../Scripts/swiftagent-install-hermes.sh"
 ```
 
-The script ensures the pinned Hermes source exists, copies the Hermes Python payload into the final app bundle, overlays the platform-specific Python packages, and runs BeeWare's `install_python` helper to copy the Python standard library and convert `.so` extension modules into signed app frameworks.
+The script ensures the pinned Hermes source exists, copies the Hermes Python payload into the final app bundle, overlays the platform-specific Python packages, and runs BeeWare's `install_python` helper to copy the Python standard library and convert `.so` extension modules into signed app frameworks. During staging, it strips Python bytecode caches and common source-control/build-tool cache directories. Hermes source files remain the runtime source of truth; bytecode precompilation is opt-in with `SWIFTAGENT_PRECOMPILE_HERMES_PYTHON=YES`.
 
 By default the script uses `Payloads/Hermes/PythonApp`. If `Payloads/Hermes/PythonApp/hermes` is missing, it runs `Scripts/update-hermes.sh` to fetch the pinned source before copying the payload. Apps can set `SWIFTAGENT_PYTHON_APP_SOURCE` to their own payload directory and `SWIFTAGENT_PYTHON_XCFRAMEWORK` to a custom Python framework path. Set `SWIFTAGENT_AUTO_FETCH_HERMES=NO` to make missing Hermes source a hard build error.
 

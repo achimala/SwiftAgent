@@ -79,6 +79,16 @@ rm -rf "$DESTINATION"
 mkdir -p "$DESTINATION/site-packages"
 
 rsync -a --delete \
+  --exclude "*/__pycache__/" \
+  --exclude "*.pyc" \
+  --exclude "*.pyo" \
+  --exclude ".DS_Store" \
+  --exclude ".git/" \
+  --exclude ".github/" \
+  --exclude ".pytest_cache/" \
+  --exclude ".mypy_cache/" \
+  --exclude ".ruff_cache/" \
+  --exclude "/hermes/uv.lock" \
   --exclude "/site-packages/" \
   --exclude "/site-packages-iphoneos/" \
   --exclude "/site-packages-iphonesimulator/" \
@@ -87,12 +97,30 @@ rsync -a --delete \
 
 if [ -d "$PYTHON_APP_SOURCE/site-packages" ]; then
   rsync -a --delete \
+    --exclude "*/__pycache__/" \
+    --exclude "*.pyc" \
+    --exclude "*.pyo" \
+    --exclude ".DS_Store" \
+    --exclude ".git/" \
+    --exclude ".github/" \
+    --exclude ".pytest_cache/" \
+    --exclude ".mypy_cache/" \
+    --exclude ".ruff_cache/" \
     "$PYTHON_APP_SOURCE/site-packages/" \
     "$DESTINATION/site-packages/"
 fi
 
 if [ -d "$PYTHON_APP_SOURCE/$PLATFORM_PACKAGES" ]; then
   rsync -a \
+    --exclude "*/__pycache__/" \
+    --exclude "*.pyc" \
+    --exclude "*.pyo" \
+    --exclude ".DS_Store" \
+    --exclude ".git/" \
+    --exclude ".github/" \
+    --exclude ".pytest_cache/" \
+    --exclude ".mypy_cache/" \
+    --exclude ".ruff_cache/" \
     "$PYTHON_APP_SOURCE/$PLATFORM_PACKAGES/" \
     "$DESTINATION/site-packages/"
 else
@@ -121,12 +149,17 @@ PY
   fi
 done
 
-if [ -n "$HOST_PYTHON" ]; then
+if [ "${SWIFTAGENT_PRECOMPILE_HERMES_PYTHON:-NO}" = "YES" ] && [ -n "$HOST_PYTHON" ]; then
   echo "Precompiling SwiftAgent Hermes Python payload with $HOST_PYTHON"
   "$HOST_PYTHON" -m compileall -q "$DESTINATION/hermes"
-else
+elif [ "${SWIFTAGENT_PRECOMPILE_HERMES_PYTHON:-NO}" = "YES" ]; then
   echo "Skipping Hermes bytecode precompile: no cpython-314 host interpreter was found"
+else
+  echo "Skipping Hermes bytecode precompile: set SWIFTAGENT_PRECOMPILE_HERMES_PYTHON=YES to enable"
 fi
+
+find "$DESTINATION" -type d -name "__pycache__" -prune -exec rm -rf {} +
+find "$DESTINATION" -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
 
 export EXPANDED_CODE_SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
 export EXPANDED_CODE_SIGN_IDENTITY_NAME="${EXPANDED_CODE_SIGN_IDENTITY_NAME:-Sign to Run Locally}"
