@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var sessions: [HermesSessionSummary] = []
     @State private var currentSessionID: String?
     @State private var activeAssistantEntries: [UUID: UUID] = [:]
+    @State private var pendingAssistantEntries: [UUID: UUID] = [:]
     @State private var assistantEntriesByTurn: [UUID: Set<UUID>] = [:]
     @State private var activeReasoningEntries: [UUID: UUID] = [:]
     @State private var turnsWithReasoning: Set<UUID> = []
@@ -374,6 +375,7 @@ struct ContentView: View {
 
         entries = ChatTranscriptFormatter.entries(from: state.currentSession)
         activeAssistantEntries.removeAll()
+        pendingAssistantEntries.removeAll()
         assistantEntriesByTurn.removeAll()
         activeReasoningEntries.removeAll()
         turnsWithReasoning.removeAll()
@@ -387,6 +389,7 @@ struct ContentView: View {
         draftFocused = false
         append(.user, title: "You", body: userMessage)
         let turnID = UUID()
+        appendPendingAssistant(for: turnID)
         let config = agentConfiguration
         let selectedProvider = provider
         isRunning = true
@@ -409,7 +412,8 @@ struct ContentView: View {
                 }
             } catch {
                 await MainActor.run {
-                    finishAssistantTurn(turnID, fallback: "")
+                    removePendingAssistantEntry(for: turnID)
+                    endActiveAssistantSegment(for: turnID)
                     stopReasoningSpinner(for: turnID)
                     append(.error, title: "Error", body: Self.displayText(for: error))
                     isRunning = false
@@ -434,17 +438,22 @@ struct ContentView: View {
     private func handle(event: SwiftAgentEvent, turnID: UUID) {
         switch event.kind {
         case "delta":
+            pendingAssistantEntries.removeValue(forKey: turnID)
             endActiveReasoningChunk(for: turnID)
             appendToAssistant(turnID: turnID, text: event.payload)
         case "interim":
+            removePendingAssistantEntry(for: turnID)
             endActiveReasoningChunk(for: turnID)
             let entryID = append(.assistant, title: "Hermes", body: event.payload)
             noteAssistantEntry(entryID, for: turnID)
         case "reasoning_delta":
+            removePendingAssistantEntry(for: turnID)
             appendReasoning(event.payload, turnID: turnID)
         case "tool_gen":
+            removePendingAssistantEntry(for: turnID)
             endActiveReasoningChunk(for: turnID)
         case "tool_start":
+            removePendingAssistantEntry(for: turnID)
             endActiveReasoningChunk(for: turnID)
             endActiveAssistantSegment(for: turnID)
             if let tool = ChatTranscriptFormatter.decodeToolEvent(event.payload) {
@@ -453,6 +462,7 @@ struct ContentView: View {
                 append(.tool, title: "Running tool", body: event.payload)
             }
         case "tool_complete":
+            removePendingAssistantEntry(for: turnID)
             endActiveReasoningChunk(for: turnID)
             endActiveAssistantSegment(for: turnID)
             if let tool = ChatTranscriptFormatter.decodeToolEvent(event.payload) {
@@ -465,11 +475,14 @@ struct ContentView: View {
         case "timing":
             break
         case "done":
+            removePendingAssistantEntry(for: turnID)
             stopAssistantSpinner(for: turnID)
             stopReasoningSpinner(for: turnID)
         case "error":
+            removePendingAssistantEntry(for: turnID)
             append(.error, title: "Hermes Error", body: event.payload)
         default:
+            removePendingAssistantEntry(for: turnID)
             append(.status, title: event.kind, body: event.payload)
         }
     }
@@ -530,6 +543,24 @@ struct ContentView: View {
         noteAssistantEntry(entryID, for: turnID)
         guard let index = entries.firstIndex(where: { $0.id == entryID }) else { return }
         entries[index].body += text
+    }
+
+    private func appendPendingAssistant(for turnID: UUID) {
+        let entryID = append(.assistant, title: "Hermes", body: "", isStreaming: true)
+        activeAssistantEntries[turnID] = entryID
+        pendingAssistantEntries[turnID] = entryID
+        noteAssistantEntry(entryID, for: turnID)
+    }
+
+    private func removePendingAssistantEntry(for turnID: UUID) {
+        guard let entryID = pendingAssistantEntries.removeValue(forKey: turnID) else { return }
+        guard let index = entries.firstIndex(where: { $0.id == entryID }) else { return }
+        guard entries[index].body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        entries.remove(at: index)
+        if activeAssistantEntries[turnID] == entryID {
+            activeAssistantEntries.removeValue(forKey: turnID)
+        }
+        assistantEntriesByTurn[turnID]?.remove(entryID)
     }
 
     private func noteAssistantEntry(_ entryID: UUID, for turnID: UUID) {
@@ -621,10 +652,16 @@ struct ContentView: View {
               let index = entries.firstIndex(where: { $0.id == id })
         else { return }
         if entries[index].body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if pendingAssistantEntries[turnID] == id && fallback.isEmpty {
+                removePendingAssistantEntry(for: turnID)
+                assistantEntriesByTurn.removeValue(forKey: turnID)
+                return
+            }
             entries[index].body = fallback.isEmpty ? "(no response text)" : fallback
         } else {
             entries[index].body = entries[index].body.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        pendingAssistantEntries.removeValue(forKey: turnID)
         entries[index].isStreaming = false
         activeAssistantEntries.removeValue(forKey: turnID)
         assistantEntriesByTurn.removeValue(forKey: turnID)

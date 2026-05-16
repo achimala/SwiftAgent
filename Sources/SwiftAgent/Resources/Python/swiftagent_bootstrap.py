@@ -1,7 +1,10 @@
+import contextlib
 import importlib
+import io
 import json
 import os
 import platform
+import re
 import sys
 import time
 import traceback
@@ -18,6 +21,8 @@ from swiftagent_local_provider_adapter import (
 
 _hermes_source_path = None
 _agent = None
+_slash_cli = None
+_slash_cli_signature = None
 _session_db = None
 _conversation_history = []
 _conversation_session_id = None
@@ -104,6 +109,7 @@ def hermes_configure(
     enable_memory=True,
 ):
     global _agent, _agent_config, _conversation_history, _conversation_session_id, _session_db
+    global _slash_cli, _slash_cli_signature
 
     next_config = {
         "base_url": base_url.strip() or "https://api.openai.com/v1",
@@ -116,6 +122,8 @@ def hermes_configure(
     }
     if next_config != _agent_config:
         _agent = None
+        _slash_cli = None
+        _slash_cli_signature = None
         _session_db = None
         _conversation_history = []
         _conversation_session_id = None
@@ -205,10 +213,12 @@ def _load_conversation_history(session_id):
 
 
 def _reset_agent_for_session(session_id, *, load_history=True):
-    global _agent, _conversation_history, _conversation_session_id
+    global _agent, _conversation_history, _conversation_session_id, _slash_cli, _slash_cli_signature
 
     _save_session_id(session_id)
     _agent = None
+    _slash_cli = None
+    _slash_cli_signature = None
     _conversation_session_id = session_id
     _conversation_history = _load_conversation_history(session_id) if load_history else []
 
@@ -473,9 +483,7 @@ def _get_agent():
             _conversation_history = _load_conversation_history(session_id)
             _conversation_session_id = session_id
             emit_agent_step("swiftagent_history_loaded")
-        enabled_toolsets = ["safe", "terminal", "file"]
-        if _agent_config["enable_memory"]:
-            enabled_toolsets.append("memory")
+        enabled_toolsets = _enabled_toolsets_for_config()
         emit_agent_step("swiftagent_constructing_agent")
         _agent = agent_class(
             base_url=_agent_config["base_url"],
@@ -501,6 +509,110 @@ def _emit_stream(event, payload=""):
         _hermes_swiftagent.emit_stream(str(event), "" if payload is None else str(payload))
     except Exception:
         pass
+
+
+def _enabled_toolsets_for_config():
+    enabled_toolsets = ["safe", "terminal", "file"]
+    if _agent_config["enable_memory"]:
+        enabled_toolsets.append("memory")
+    return enabled_toolsets
+
+
+def _is_slash_command(message):
+    text = (message or "").lstrip()
+    return text.startswith("/") and not text.startswith("//")
+
+
+def _strip_terminal_output(value):
+    text = "" if value is None else str(value)
+    text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.rstrip() for line in text.splitlines()]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
+
+
+def _get_slash_cli():
+    global _slash_cli, _slash_cli_signature
+
+    if not _hermes_source_path:
+        raise RuntimeError("Hermes source path has not been prepared.")
+
+    if _hermes_source_path not in sys.path:
+        sys.path.insert(0, _hermes_source_path)
+
+    session_id = _load_or_create_session_id()
+    signature = (
+        session_id,
+        _agent_config["base_url"],
+        _agent_config["api_key"],
+        _agent_config["model"],
+        tuple(_enabled_toolsets_for_config()),
+    )
+    if _slash_cli is not None and _slash_cli_signature == signature:
+        return _slash_cli
+
+    os.environ["HERMES_SESSION_KEY"] = session_id
+    os.environ["HERMES_INTERACTIVE"] = "1"
+
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        import cli as cli_mod
+        from cli import HermesCLI
+
+        cli = HermesCLI(
+            model=_agent_config["model"],
+            toolsets=_enabled_toolsets_for_config(),
+            api_key=_agent_config["api_key"],
+            base_url=_agent_config["base_url"],
+            compact=True,
+            resume=session_id,
+            verbose=False,
+        )
+
+    _slash_cli = cli
+    _slash_cli_signature = signature
+    return _slash_cli
+
+
+def _run_slash_command(command):
+    cmd = (command or "").strip()
+    if not cmd:
+        return ""
+    if not cmd.startswith("/"):
+        cmd = f"/{cmd}"
+
+    import cli as cli_mod
+    from rich.console import Console
+
+    cli = _get_slash_cli()
+    buf = io.StringIO()
+    old_console = getattr(cli, "console", None)
+    old_cprint = getattr(cli_mod, "_cprint", None)
+    cli.console = Console(file=buf, force_terminal=False, width=100, color_system=None)
+    if old_cprint is not None:
+        cli_mod._cprint = lambda text: print(text)
+
+    try:
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            keep_running = cli.process_command(cmd)
+    finally:
+        if old_cprint is not None:
+            cli_mod._cprint = old_cprint
+        if old_console is not None:
+            cli.console = old_console
+
+    output = _strip_terminal_output(buf.getvalue())
+    if hasattr(cli, "session_id") and cli.session_id:
+        if cli.session_id != _conversation_session_id:
+            _reset_agent_for_session(cli.session_id, load_history=True)
+        else:
+            _save_session_id(cli.session_id)
+    if keep_running is False and not output:
+        output = "Session closed."
+    return output
 
 
 def hermes_probe(hermes_source_path=None):
@@ -643,6 +755,30 @@ def hermes_chat(message):
             emit_timing(label, detail)
 
         emit_timing("python_chat_start")
+        if _is_slash_command(message):
+            emit_timing("slash_command_start")
+            output = _run_slash_command(message)
+            emit_timing("slash_command_returned")
+            if output:
+                _emit_stream("delta", output)
+            _emit_stream("done", "")
+            return json.dumps(
+                {
+                    "bridge_ok": True,
+                    "ok": True,
+                    "stage": "slash_command",
+                    "final_response": output,
+                    "history_messages": len(_conversation_history),
+                    "completed": True,
+                    "error": None,
+                    "interrupted": False,
+                    "partial": False,
+                },
+                indent=2,
+                sort_keys=True,
+                default=str,
+            )
+
         agent = _get_agent()
         emit_timing("python_agent_ready", getattr(agent, "model", None))
 
