@@ -2,9 +2,7 @@
 
 SwiftAgent is a Swift package for embedding an AI agent inside an iOS app.
 
-The current implementation ships Hermes as the first supported agent runtime. It embeds CPython, bundles Hermes and its Python dependencies, streams agent events back to SwiftUI, and gives the agent a useful iOS-safe workspace with file tools and an embedded iSH shell.
-
-SwiftAgent runs Hermes in process by default. An experimental iOS 26+ ExtensionKit backend is included for out-of-process isolation work, but it is not the recommended default yet.
+The current implementation ships Hermes as the first supported agent runtime. It embeds CPython, bundles Hermes and its Python dependencies, streams agent events back to SwiftUI, and gives the agent a useful iOS-safe workspace with file tools and an embedded iSH shell. SwiftAgent currently runs Hermes in process.
 
 <img src="docs/assets/swiftagent-sample.png" alt="Hermes running in the SwiftAgent sample app" width="420">
 
@@ -12,7 +10,6 @@ SwiftAgent runs Hermes in process by default. An experimental iOS 26+ ExtensionK
 
 - A high-level Swift API for creating an agent, sending messages, streaming events, and managing sessions.
 - A sample iOS chat app that looks and behaves like a small agent client.
-- Experimental out-of-process execution on iOS 26+ via ExtensionKit and XPC.
 - Embedded Python and Hermes packaging helpers.
 - iSH-backed shell commands inside an app workspace.
 - File read/write tools that work across the iOS host filesystem and the iSH workspace.
@@ -64,39 +61,6 @@ Fresh checkouts fetch the pinned Hermes source on the first build. To prefetch e
 
 Set `SWIFTAGENT_AUTO_FETCH_HERMES=NO` in the build phase environment if CI should fail instead of fetching when the local Hermes payload is missing.
 
-## Optional: Add The Experimental Worker Extension
-
-SwiftAgent's normal `HermesAgent(configuration:)` path runs in process. The iOS 26+ ExtensionKit worker is available for experimentation, but full Hermes currently needs more memory profiling and slimming before this should be used as the default path in production apps.
-
-1. Add an ExtensionKit extension target to your app.
-
-2. Link the `SwiftAgent` package product from both the app target and the extension target.
-
-3. Create the worker boilerplate:
-
-   ```bash
-   ./Scripts/swiftagent-scaffold-worker-extension.sh \
-     --host-bundle-id com.example.MyApp \
-     --output-dir SwiftAgentWorker
-   ```
-
-4. Add the generated files to targets:
-
-   - `SwiftAgentWorker.swift` and `Info.plist` go in the extension target.
-   - `SwiftAgentWorkerExtensionPoint.swift` goes in the host app target.
-
-5. In the extension target build settings, enable:
-
-   ```text
-   EX_ENABLE_EXTENSION_POINT_GENERATION = YES
-   ```
-
-6. Add the same `swiftagent-install-hermes.sh` Run Script phase to the extension target.
-
-7. Make sure the host app embeds the extension target in `Embed ExtensionKit Extensions`.
-
-That app-owned extension target is required by iOS. SPM can provide the code, resources, and scaffolding, but the consuming app must own the `.appex` bundle, signing, and embedding relationship.
-
 ## Use It
 
 ```swift
@@ -134,7 +98,6 @@ let agent = try HermesAgent(
         temperature: 0.2
     ),
     sourceURL: HermesAgent.bundledSourceURL(),
-    executionMode: .inProcess,
     modelProvider: SwiftAgentMLXModelProvider()
 )
 ```
@@ -148,7 +111,6 @@ import SwiftAgentFoundationModels
 let agent = try HermesAgent(
     configuration: .foundationModels(maxTokens: 160, temperature: 0.1),
     sourceURL: HermesAgent.bundledSourceURL(),
-    executionMode: .inProcess,
     modelProvider: SwiftAgentFoundationModelsProvider()
 )
 ```
@@ -175,9 +137,7 @@ cp Examples/HermesAgentSample/Local.xcconfig.example \
   Examples/HermesAgentSample/Local.xcconfig
 ```
 
-Then edit `Examples/HermesAgentSample/Local.xcconfig` with your Apple development team ID. Keep `SWIFTAGENT_SAMPLE_BUNDLE_ID_PREFIX = com.daysail` for the checked-in sample app: the sample ExtensionKit worker is statically bound to `com.daysail.HermesAgentSample`. That file is ignored by git, so your personal signing identity does not get committed.
-
-For your own app, use your own bundle ID and generate/update the worker entrypoint so its `AppExtensionPoint.Identifier(host:name:)` host string exactly matches your app bundle ID. ExtensionKit requires that host string to be a compile-time static string.
+Then edit `Examples/HermesAgentSample/Local.xcconfig` with your Apple development team ID. That file is ignored by git, so your personal signing identity does not get committed.
 
 In the sample app, configure an OpenAI-compatible endpoint in settings, send a message, and watch reasoning summaries, tool calls, tool output, timing, and final responses stream back into the chat.
 
@@ -186,8 +146,7 @@ In the sample app, configure an OpenAI-compatible endpoint in settings, send a m
 Verified in simulator and generic iOS builds:
 
 - Hermes initializes inside the iOS app bundle.
-- Hermes runs in process by default.
-- The ExtensionKit backend is available as an experimental opt-in for out-of-process work on iOS 26+.
+- Hermes runs in process.
 - Terminal calls run through a persistent iSH ARM64 Alpine shell.
 - File read/write tools work in the SwiftAgent workspace.
 - Hermes memory, context, and soul can persist under Application Support.

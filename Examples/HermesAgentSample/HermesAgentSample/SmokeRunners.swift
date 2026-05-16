@@ -16,7 +16,6 @@ enum SampleSmokeRunners {
         await HermesFoundationModelsToolSmokeRunner.runIfRequested()
         await SwiftAgentISHSmokeRunner.runIfRequested()
         await HermesOpenAISmokeRunner.runIfRequested()
-        await HermesExtensionProbeSmokeRunner.runIfRequested()
     }
 }
 
@@ -374,20 +373,9 @@ private enum HermesOpenAISmokeRunner {
                 enableContext: enableContext,
                 enableMemory: enableMemory
             )
-            let backend = environment["SWIFTAGENT_OPENAI_SMOKE_BACKEND"] ?? "in-process"
-            let agent: HermesAgent
-            if backend == "extension" {
-                await recorder.write("backend=extension")
-                agent = try HermesAgent(
-                    configuration: configuration,
-                    sourceURL: HermesAgent.bundledSourceURL(),
-                    backend: HermesExtensionProcessBackend(appExtensionPoint: .swiftAgentWorker)
-                )
-            } else {
-                await recorder.write("backend=in-process")
-                agent = try HermesAgent(configuration: configuration)
-            }
-            let result = try agent.send("Reply exactly: SwiftAgent OpenAI extension smoke ok") { event in
+            await recorder.write("backend=in-process")
+            let agent = try HermesAgent(configuration: configuration)
+            let result = try agent.send("Reply exactly: SwiftAgent OpenAI smoke ok") { event in
                 Task {
                     await recorder.write("event kind=\(event.kind) payload=\(event.payload)")
                 }
@@ -467,43 +455,6 @@ private enum HermesFoundationModelsToolSmokeRunner {
                 }
             }
             await recorder.write("result \(result)")
-            await recorder.write("done ok")
-        } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            await recorder.write("done error=\(message)")
-        }
-    }
-}
-
-private enum HermesExtensionProbeSmokeRunner {
-    private static let argument = "--hermes-extension-probe-smoke"
-
-    static func runIfRequested() async {
-        guard ProcessInfo.processInfo.arguments.contains(argument) else { return }
-
-        let recorder = SmokeRecorder(filename: "hermes-extension-probe-smoke.log")
-        await recorder.write("start")
-
-        do {
-            guard #available(iOS 26.0, *) else {
-                await recorder.write("done skipped=requires-ios-26")
-                return
-            }
-
-            let agent = try HermesAgent(
-                configuration: .openAI(apiKey: "probe-key", model: "probe-model"),
-                sourceURL: HermesAgent.bundledSourceURL(),
-                backend: HermesExtensionProcessBackend(appExtensionPoint: .swiftAgentWorker)
-            )
-            let result = try agent.probe()
-            await recorder.write("python \(result.python)")
-            await recorder.write("hermes \(result.hermes)")
-            let toolProbe = try agent.toolProbe()
-            await recorder.write("toolProbe \(toolProbe)")
-            let sessionState = try agent.newSession()
-            await recorder.write(
-                "newSession current=\(sessionState.currentSessionID ?? "nil") sessions=\(sessionState.sessions.count)"
-            )
             await recorder.write("done ok")
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription

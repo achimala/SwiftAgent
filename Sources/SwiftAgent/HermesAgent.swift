@@ -1,9 +1,6 @@
 import SwiftAgentCore
 import Foundation
 import Darwin
-#if os(iOS)
-import ExtensionFoundation
-#endif
 
 public struct HermesAgentConfiguration: Sendable {
     public var baseURL: String
@@ -101,32 +98,6 @@ public final class HermesAgent: @unchecked Sendable {
     public convenience init(
         configuration: HermesAgentConfiguration,
         sourceURL: URL,
-        executionMode: HermesAgentExecutionMode,
-        runtime: HermesAgentRuntime = HermesAgentRuntime(),
-        shellEnvironment: (any SwiftAgentShellEnvironment)? = nil,
-        modelProvider: (any SwiftAgentModelProvider)? = nil
-    ) {
-        switch executionMode {
-        case .automatic, .inProcess:
-            self.init(
-                configuration: configuration,
-                sourceURL: sourceURL,
-                runtime: runtime,
-                shellEnvironment: shellEnvironment,
-                modelProvider: modelProvider
-            )
-        case .extensionProcess:
-            self.init(
-                configuration: configuration,
-                sourceURL: sourceURL,
-                backend: HermesExtensionProcessBackend()
-            )
-        }
-    }
-
-    public convenience init(
-        configuration: HermesAgentConfiguration,
-        sourceURL: URL,
         runtime: HermesAgentRuntime = HermesAgentRuntime(),
         shellEnvironment: (any SwiftAgentShellEnvironment)? = nil,
         modelProvider: (any SwiftAgentModelProvider)? = nil
@@ -142,26 +113,6 @@ public final class HermesAgent: @unchecked Sendable {
         )
     }
 
-    #if os(iOS)
-    @available(iOS 26.0, *)
-    public static func openAI(
-        configuration: HermesAgentConfiguration,
-        sourceURL: URL? = nil,
-        appExtensionPoint: AppExtensionPoint? = nil
-    ) throws -> HermesAgent {
-        let resolvedSourceURL = try sourceURL ?? HermesAgent.bundledSourceURL()
-        if let appExtensionPoint {
-            return HermesAgent(
-                configuration: configuration,
-                sourceURL: resolvedSourceURL,
-                backend: HermesExtensionProcessBackend(appExtensionPoint: appExtensionPoint)
-            )
-        }
-
-        return HermesAgent(configuration: configuration, sourceURL: resolvedSourceURL)
-    }
-    #endif
-
     public static func localProvider(
         configuration: HermesAgentConfiguration,
         sourceURL: URL? = nil,
@@ -171,7 +122,6 @@ public final class HermesAgent: @unchecked Sendable {
         HermesAgent(
             configuration: configuration,
             sourceURL: try sourceURL ?? HermesAgent.bundledSourceURL(),
-            executionMode: .inProcess,
             shellEnvironment: shellEnvironment,
             modelProvider: modelProvider
         )
@@ -181,7 +131,6 @@ public final class HermesAgent: @unchecked Sendable {
         configuration: HermesAgentConfiguration,
         bundle: Bundle = .main,
         bundledSourcePath: String = "PythonApp/hermes",
-        executionMode: HermesAgentExecutionMode = .automatic,
         runtime: HermesAgentRuntime = HermesAgentRuntime(),
         shellEnvironment: (any SwiftAgentShellEnvironment)? = nil,
         modelProvider: (any SwiftAgentModelProvider)? = nil
@@ -189,7 +138,6 @@ public final class HermesAgent: @unchecked Sendable {
         try self.init(
             configuration: configuration,
             sourceURL: Self.bundledSourceURL(in: bundle, path: bundledSourcePath),
-            executionMode: executionMode,
             runtime: runtime,
             shellEnvironment: shellEnvironment,
             modelProvider: modelProvider
