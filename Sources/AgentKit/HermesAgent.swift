@@ -1,6 +1,9 @@
 import AgentKitCore
 import Foundation
 import Darwin
+#if os(iOS)
+import ExtensionFoundation
+#endif
 
 public struct HermesAgentConfiguration: Sendable {
     public var baseURL: String
@@ -68,7 +71,7 @@ public struct HermesAgentConfiguration: Sendable {
     }
 
     func applyRuntimeEnvironment() {
-        guard baseURL == "hermes-local-mlx://chat" else { return }
+        guard baseURL == "hermes-local-mlx://chat" || baseURL == "hermes-foundation-models://chat" else { return }
 
         if let localMLXMaxTokens {
             setenv("HERMES_LOCAL_MLX_MAX_TOKENS", String(localMLXMaxTokens), 1)
@@ -136,6 +139,41 @@ public final class HermesAgent: @unchecked Sendable {
                 shellEnvironment: shellEnvironment,
                 modelProvider: modelProvider
             )
+        )
+    }
+
+    #if os(iOS)
+    @available(iOS 26.0, *)
+    public static func openAI(
+        configuration: HermesAgentConfiguration,
+        sourceURL: URL? = nil,
+        appExtensionPoint: AppExtensionPoint? = nil
+    ) throws -> HermesAgent {
+        let resolvedSourceURL = try sourceURL ?? HermesAgent.bundledSourceURL()
+        if let appExtensionPoint {
+            return try HermesAgent(
+                configuration: configuration,
+                sourceURL: resolvedSourceURL,
+                backend: HermesExtensionProcessBackend(appExtensionPoint: appExtensionPoint)
+            )
+        }
+
+        return try HermesAgent(configuration: configuration, sourceURL: resolvedSourceURL)
+    }
+    #endif
+
+    public static func localProvider(
+        configuration: HermesAgentConfiguration,
+        sourceURL: URL? = nil,
+        modelProvider: any AgentKitModelProvider,
+        shellEnvironment: (any AgentKitShellEnvironment)? = nil
+    ) throws -> HermesAgent {
+        HermesAgent(
+            configuration: configuration,
+            sourceURL: try sourceURL ?? HermesAgent.bundledSourceURL(),
+            executionMode: .inProcess,
+            shellEnvironment: shellEnvironment,
+            modelProvider: modelProvider
         )
     }
 

@@ -218,6 +218,16 @@ enum ChatTranscriptFormatter {
         }
     }
 
+    static func toolResultIsError(_ tool: ToolEvent) -> Bool {
+        if tool.isError == true || tool.ok == false {
+            return true
+        }
+        guard let preview = tool.resultPreview else {
+            return false
+        }
+        return persistedToolResultIsError(preview)
+    }
+
     static func displayToolName(_ name: String) -> String {
         name.replacingOccurrences(of: "_", with: " ")
     }

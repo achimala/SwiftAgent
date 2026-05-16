@@ -22,8 +22,10 @@ struct ContentView: View {
     @State private var showingSessions = false
     @State private var sessions: [HermesSessionSummary] = []
     @State private var currentSessionID: String?
+    @State private var activeAssistantEntries: [UUID: UUID] = [:]
+    @State private var assistantEntriesByTurn: [UUID: Set<UUID>] = [:]
     @State private var activeReasoningEntries: [UUID: UUID] = [:]
-    @State private var assistantIDsWithReasoning: Set<UUID> = []
+    @State private var turnsWithReasoning: Set<UUID> = []
     @FocusState private var draftFocused: Bool
 
     var body: some View {
@@ -262,24 +264,27 @@ struct ContentView: View {
         provider == "foundation"
     }
 
-    nonisolated private static func makeAgent(configuration: HermesAgentConfiguration) throws -> HermesAgent {
-        if configuration.baseURL.hasPrefix("hermes-foundation-models://") {
+    nonisolated private static func makeAgent(configuration: HermesAgentConfiguration, provider: String) throws -> HermesAgent {
+        if provider == "foundation" {
             if #available(iOS 26.0, *) {
-                return try HermesAgent(
-                    configuration: configuration,
-                    sourceURL: HermesAgent.bundledSourceURL(),
-                    executionMode: .inProcess,
-                    modelProvider: AgentKitFoundationModelsProvider()
+                return try HermesAgent.foundationModels(
+                    maxTokens: configuration.localMLXMaxTokens ?? 256,
+                    temperature: configuration.localMLXTemperature ?? 0.2,
+                    enableSoul: configuration.enableSoul,
+                    enableContext: configuration.enableContext,
+                    enableMemory: configuration.enableMemory
                 )
             }
         }
 
-        if configuration.baseURL.hasPrefix("hermes-local-mlx://") {
-            return try HermesAgent(
-                configuration: configuration,
-                sourceURL: HermesAgent.bundledSourceURL(),
-                executionMode: .inProcess,
-                modelProvider: AgentKitMLXModelProvider()
+        if provider == "mlx" {
+            return try HermesAgent.localMLX(
+                model: configuration.model,
+                maxTokens: configuration.localMLXMaxTokens ?? 128,
+                temperature: configuration.localMLXTemperature ?? 0.2,
+                enableSoul: configuration.enableSoul,
+                enableContext: configuration.enableContext,
+                enableMemory: configuration.enableMemory
             )
         }
 
@@ -296,9 +301,10 @@ struct ContentView: View {
 
     private func loadCurrentSession() {
         let configuration = agentConfiguration
+        let selectedProvider = provider
         Task.detached {
             do {
-                let state = try Self.makeAgent(configuration: configuration).sessionState()
+                let state = try Self.makeAgent(configuration: configuration, provider: selectedProvider).sessionState()
                 await MainActor.run {
                     applySessionState(state, renderTranscript: true)
                 }
@@ -312,9 +318,10 @@ struct ContentView: View {
 
     private func refreshSessions() {
         let configuration = agentConfiguration
+        let selectedProvider = provider
         Task.detached {
             do {
-                let state = try Self.makeAgent(configuration: configuration).sessionState()
+                let state = try Self.makeAgent(configuration: configuration, provider: selectedProvider).sessionState()
                 await MainActor.run {
                     applySessionState(state, renderTranscript: false)
                 }
@@ -328,10 +335,11 @@ struct ContentView: View {
 
     private func loadSession(_ sessionID: String) {
         let configuration = agentConfiguration
+        let selectedProvider = provider
         isRunning = true
         Task.detached {
             do {
-                let state = try Self.makeAgent(configuration: configuration).loadSession(sessionID)
+                let state = try Self.makeAgent(configuration: configuration, provider: selectedProvider).loadSession(sessionID)
                 await MainActor.run {
                     applySessionState(state, renderTranscript: true)
                     isRunning = false
@@ -347,10 +355,11 @@ struct ContentView: View {
 
     private func createNewSession() {
         let configuration = agentConfiguration
+        let selectedProvider = provider
         isRunning = true
         Task.detached {
             do {
-                let state = try Self.makeAgent(configuration: configuration).newSession()
+                let state = try Self.makeAgent(configuration: configuration, provider: selectedProvider).newSession()
                 await MainActor.run {
                     applySessionState(state, renderTranscript: true)
                     draft = ""
@@ -372,8 +381,10 @@ struct ContentView: View {
         guard renderTranscript else { return }
 
         entries = ChatTranscriptFormatter.entries(from: state.currentSession)
+        activeAssistantEntries.removeAll()
+        assistantEntriesByTurn.removeAll()
         activeReasoningEntries.removeAll()
-        assistantIDsWithReasoning.removeAll()
+        turnsWithReasoning.removeAll()
     }
 
     private func sendMessage() {
@@ -383,30 +394,31 @@ struct ContentView: View {
         draft = ""
         draftFocused = false
         append(.user, title: "You", body: userMessage)
-        let assistantID = append(.assistant, title: "Hermes", body: "", isStreaming: true)
+        let turnID = UUID()
         let config = agentConfiguration
+        let selectedProvider = provider
         isRunning = true
 
         Task.detached {
             do {
-                let agent = try Self.makeAgent(configuration: config)
+                let agent = try Self.makeAgent(configuration: config, provider: selectedProvider)
                 let final = try agent.send(userMessage) { event in
                     Task { @MainActor in
-                        handle(event: event, assistantID: assistantID)
+                        handle(event: event, turnID: turnID)
                     }
                 }
 
                 await MainActor.run {
                     let result = ChatTranscriptFormatter.chatResult(from: final)
-                    finishAssistant(assistantID, fallback: ChatTranscriptFormatter.finalResponse(from: result, raw: final))
-                    appendFinalReasoning(result?.lastReasoning, assistantID: assistantID)
-                    stopReasoningSpinner(for: assistantID)
+                    finishAssistantTurn(turnID, fallback: ChatTranscriptFormatter.finalResponse(from: result, raw: final))
+                    appendFinalReasoning(result?.lastReasoning, turnID: turnID)
+                    stopReasoningSpinner(for: turnID)
                     isRunning = false
                 }
             } catch {
                 await MainActor.run {
-                    finishAssistant(assistantID, fallback: "")
-                    stopReasoningSpinner(for: assistantID)
+                    finishAssistantTurn(turnID, fallback: "")
+                    stopReasoningSpinner(for: turnID)
                     append(.error, title: "Error", body: Self.displayText(for: error))
                     isRunning = false
                 }
@@ -427,54 +439,47 @@ struct ContentView: View {
     }
 
     @MainActor
-    private func handle(event: AgentKitEvent, assistantID: UUID) {
+    private func handle(event: AgentKitEvent, turnID: UUID) {
         switch event.kind {
         case "delta":
-            endActiveReasoningChunk(for: assistantID)
-            appendToAssistant(assistantID, text: event.payload)
+            endActiveReasoningChunk(for: turnID)
+            appendToAssistant(turnID: turnID, text: event.payload)
         case "interim":
-            endActiveReasoningChunk(for: assistantID)
-            append(.assistant, title: "Hermes", body: event.payload)
+            endActiveReasoningChunk(for: turnID)
+            let entryID = append(.assistant, title: "Hermes", body: event.payload)
+            noteAssistantEntry(entryID, for: turnID)
         case "reasoning_delta":
-            appendReasoning(event.payload, assistantID: assistantID)
+            appendReasoning(event.payload, turnID: turnID)
         case "tool_gen":
-            endActiveReasoningChunk(for: assistantID)
+            endActiveReasoningChunk(for: turnID)
         case "tool_start":
-            endActiveReasoningChunk(for: assistantID)
+            endActiveReasoningChunk(for: turnID)
+            endActiveAssistantSegment(for: turnID)
             if let tool = ChatTranscriptFormatter.decodeToolEvent(event.payload) {
                 appendToolStart(tool)
             } else {
                 append(.tool, title: "Running tool", body: event.payload)
             }
-            moveEmptyAssistantToEnd(assistantID)
         case "tool_complete":
-            endActiveReasoningChunk(for: assistantID)
+            endActiveReasoningChunk(for: turnID)
+            endActiveAssistantSegment(for: turnID)
             if let tool = ChatTranscriptFormatter.decodeToolEvent(event.payload) {
                 finishTool(tool)
             } else {
                 append(.tool, title: "Tool finished", body: event.payload)
             }
-            moveEmptyAssistantToEnd(assistantID)
         case "tool_progress":
-            endActiveReasoningChunk(for: assistantID)
+            endActiveReasoningChunk(for: turnID)
         case "timing":
             break
         case "done":
-            stopAssistantSpinner(assistantID)
-            stopReasoningSpinner(for: assistantID)
+            stopAssistantSpinner(for: turnID)
+            stopReasoningSpinner(for: turnID)
         case "error":
             append(.error, title: "Hermes Error", body: event.payload)
         default:
             append(.status, title: event.kind, body: event.payload)
         }
-    }
-
-    private func moveEmptyAssistantToEnd(_ id: UUID) {
-        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
-        let body = entries[index].body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard entries[index].isStreaming, body.isEmpty, index != entries.index(before: entries.endIndex) else { return }
-        let entry = entries.remove(at: index)
-        entries.append(entry)
     }
 
     private func appendToolStart(_ tool: ToolEvent) {
@@ -497,7 +502,7 @@ struct ContentView: View {
     private func finishTool(_ tool: ToolEvent) {
         let name = tool.name ?? "tool"
         let output = ChatTranscriptFormatter.formatToolResult(tool)
-        let ok = tool.ok ?? true
+        let ok = !ChatTranscriptFormatter.toolResultIsError(tool)
         if let id = tool.id, let index = entries.lastIndex(where: { $0.toolCallID == id }) {
             entries[index].title = ChatTranscriptFormatter.displayToolName(name)
             entries[index].toolName = name
@@ -521,16 +526,40 @@ struct ContentView: View {
         entries.append(entry)
     }
 
-    private func appendToAssistant(_ id: UUID, text: String) {
-        guard !text.isEmpty, let index = entries.firstIndex(where: { $0.id == id }) else { return }
+    private func appendToAssistant(turnID: UUID, text: String) {
+        guard !text.isEmpty else { return }
+        let entryID = activeAssistantEntries[turnID] ?? append(
+            .assistant,
+            title: "Hermes",
+            body: "",
+            isStreaming: true
+        )
+        activeAssistantEntries[turnID] = entryID
+        noteAssistantEntry(entryID, for: turnID)
+        guard let index = entries.firstIndex(where: { $0.id == entryID }) else { return }
         entries[index].body += text
     }
 
-    private func appendReasoning(_ text: String, assistantID: UUID) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        assistantIDsWithReasoning.insert(assistantID)
+    private func noteAssistantEntry(_ entryID: UUID, for turnID: UUID) {
+        var entries = assistantEntriesByTurn[turnID] ?? []
+        entries.insert(entryID)
+        assistantEntriesByTurn[turnID] = entries
+    }
 
-        if let reasoningID = activeReasoningEntries[assistantID],
+    private func endActiveAssistantSegment(for turnID: UUID) {
+        guard let entryID = activeAssistantEntries[turnID],
+              let index = entries.firstIndex(where: { $0.id == entryID })
+        else { return }
+        entries[index].body = entries[index].body.trimmingCharacters(in: .whitespacesAndNewlines)
+        entries[index].isStreaming = false
+        activeAssistantEntries.removeValue(forKey: turnID)
+    }
+
+    private func appendReasoning(_ text: String, turnID: UUID) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        turnsWithReasoning.insert(turnID)
+
+        if let reasoningID = activeReasoningEntries[turnID],
            let index = entries.firstIndex(where: { $0.id == reasoningID }) {
             entries[index].body += text
             entries[index].isStreaming = true
@@ -543,15 +572,14 @@ struct ContentView: View {
             body: text.trimmingCharacters(in: .whitespacesAndNewlines),
             isStreaming: true
         )
-        activeReasoningEntries[assistantID] = reasoningID
-        moveEmptyAssistantToEnd(assistantID)
+        activeReasoningEntries[turnID] = reasoningID
     }
 
-    private func appendFinalReasoning(_ text: String?, assistantID: UUID) {
+    private func appendFinalReasoning(_ text: String?, turnID: UUID) {
         let cleaned = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !cleaned.isEmpty, !assistantIDsWithReasoning.contains(assistantID) else { return }
+        guard !cleaned.isEmpty, !turnsWithReasoning.contains(turnID) else { return }
 
-        if let reasoningID = activeReasoningEntries[assistantID],
+        if let reasoningID = activeReasoningEntries[turnID],
            let index = entries.firstIndex(where: { $0.id == reasoningID }) {
             entries[index].body = cleaned
             entries[index].isStreaming = false
@@ -564,39 +592,56 @@ struct ContentView: View {
             body: cleaned,
             isStreaming: false
         )
-        if let assistantIndex = entries.firstIndex(where: { $0.id == assistantID }) {
+        if let assistantID = activeAssistantEntries[turnID],
+           let assistantIndex = entries.firstIndex(where: { $0.id == assistantID }) {
             entries.insert(entry, at: assistantIndex)
         } else {
             entries.append(entry)
         }
-        activeReasoningEntries[assistantID] = entry.id
-        assistantIDsWithReasoning.insert(assistantID)
+        activeReasoningEntries[turnID] = entry.id
+        turnsWithReasoning.insert(turnID)
     }
 
-    private func stopReasoningSpinner(for assistantID: UUID) {
-        guard let reasoningID = activeReasoningEntries[assistantID],
+    private func stopReasoningSpinner(for turnID: UUID) {
+        guard let reasoningID = activeReasoningEntries[turnID],
               let index = entries.firstIndex(where: { $0.id == reasoningID })
         else { return }
         entries[index].isStreaming = false
-        activeReasoningEntries.removeValue(forKey: assistantID)
+        activeReasoningEntries.removeValue(forKey: turnID)
     }
 
-    private func endActiveReasoningChunk(for assistantID: UUID) {
-        stopReasoningSpinner(for: assistantID)
+    private func endActiveReasoningChunk(for turnID: UUID) {
+        stopReasoningSpinner(for: turnID)
     }
 
-    private func finishAssistant(_ id: UUID, fallback: String) {
-        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+    private func finishAssistantTurn(_ turnID: UUID, fallback: String) {
+        if activeAssistantEntries[turnID] == nil {
+            let cleanedFallback = fallback.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleanedFallback.isEmpty, assistantEntriesByTurn[turnID]?.isEmpty ?? true else {
+                assistantEntriesByTurn.removeValue(forKey: turnID)
+                return
+            }
+            let entryID = append(.assistant, title: "Hermes", body: cleanedFallback)
+            activeAssistantEntries[turnID] = entryID
+            noteAssistantEntry(entryID, for: turnID)
+        }
+        guard let id = activeAssistantEntries[turnID],
+              let index = entries.firstIndex(where: { $0.id == id })
+        else { return }
         if entries[index].body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             entries[index].body = fallback.isEmpty ? "(no response text)" : fallback
         } else {
             entries[index].body = entries[index].body.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         entries[index].isStreaming = false
+        activeAssistantEntries.removeValue(forKey: turnID)
+        assistantEntriesByTurn.removeValue(forKey: turnID)
     }
 
-    private func stopAssistantSpinner(_ id: UUID) {
-        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+    private func stopAssistantSpinner(for turnID: UUID) {
+        guard let id = activeAssistantEntries[turnID],
+              let index = entries.firstIndex(where: { $0.id == id })
+        else { return }
         entries[index].isStreaming = false
     }
 

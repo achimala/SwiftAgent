@@ -73,8 +73,6 @@ targets:
         product: AgentKit
       - package: AgentKitMLX
         product: AgentKitMLX
-      - package: AgentKitFoundationModels
-        product: AgentKitFoundationModels
     info:
       path: HermesAgentWorker/Info.plist
       properties:

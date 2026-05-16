@@ -108,7 +108,7 @@ private enum HermesLocalMLXSmokeRunner {
         await recorder.write("start model=\(modelID)")
 
         do {
-            let agent = try LocalMLXAgentFactory.make(
+            let agent = try HermesAgent.localMLX(
                 configuration: .localMLX(model: modelID, maxTokens: 64, temperature: 0.1)
             )
             let result = try agent.send(prompt) { event in
@@ -136,7 +136,7 @@ private enum HermesNewSessionSmokeRunner {
         await recorder.write("start")
 
         do {
-            let agent = try LocalMLXAgentFactory.make(configuration: .localMLX())
+            let agent = try HermesAgent.localMLX(configuration: .localMLX())
             let before = try agent.sessionState()
             await recorder.write("before current=\(before.currentSessionID ?? "nil") sessions=\(before.sessions.count)")
             let state = try agent.newSession()
@@ -169,7 +169,7 @@ private enum HermesMLXSessionCycleSmokeRunner {
         )
 
         do {
-            let agent = try LocalMLXAgentFactory.make(configuration: configuration)
+            let agent = try HermesAgent.localMLX(configuration: configuration)
             let first = try agent.send("Reply with exactly: first ok") { event in
                 Task {
                     await recorder.write("first event kind=\(event.kind) payload=\(event.payload)")
@@ -214,7 +214,7 @@ private enum HermesMLXStressSmokeRunner {
         )
 
         do {
-            let agent = try LocalMLXAgentFactory.make(configuration: configuration)
+            let agent = try HermesAgent.localMLX(configuration: configuration)
             for index in 1...4 {
                 let result = try agent.send("Reply with exactly: turn \(index) ok") { event in
                     if event.kind == "timing" || event.kind == "done" {
@@ -268,7 +268,7 @@ private enum HermesMLXToolSmokeRunner {
         )
 
         do {
-            let agent = try LocalMLXAgentFactory.make(configuration: configuration)
+            let agent = try HermesAgent.localMLX(configuration: configuration)
             _ = try agent.newSession()
             let result = try agent.send("Use the file tools to create tool-smoke.txt containing exactly local mlx tool smoke, then read the file back and answer with its contents.") { event in
                 Task {
@@ -319,17 +319,6 @@ private enum AgentKitISHSmokeRunner {
     }
 }
 
-private enum LocalMLXAgentFactory {
-    static func make(configuration: HermesAgentConfiguration) throws -> HermesAgent {
-        try HermesAgent(
-            configuration: configuration,
-            sourceURL: HermesAgent.bundledSourceURL(),
-            executionMode: .inProcess,
-            modelProvider: AgentKitMLXModelProvider()
-        )
-    }
-}
-
 private enum HermesFoundationModelsSmokeRunner {
     private static let argument = "--hermes-foundation-models-smoke"
 
@@ -345,17 +334,12 @@ private enum HermesFoundationModelsSmokeRunner {
                 return
             }
 
-            let agent = try HermesAgent(
-                configuration: .foundationModels(
-                    maxTokens: 160,
-                    temperature: 0.1,
-                    enableSoul: false,
-                    enableContext: false,
-                    enableMemory: false
-                ),
-                sourceURL: HermesAgent.bundledSourceURL(),
-                executionMode: .inProcess,
-                modelProvider: AgentKitFoundationModelsProvider()
+            let agent = try HermesAgent.foundationModels(
+                maxTokens: 160,
+                temperature: 0.1,
+                enableSoul: false,
+                enableContext: false,
+                enableMemory: false
             )
             _ = try agent.newSession()
             let result = try agent.send("Reply exactly: Hermes is running through Apple Foundation Models.") { event in
@@ -387,17 +371,12 @@ private enum HermesFoundationModelsToolSmokeRunner {
                 return
             }
 
-            let agent = try HermesAgent(
-                configuration: .foundationModels(
-                    maxTokens: 256,
-                    temperature: 0,
-                    enableSoul: false,
-                    enableContext: false,
-                    enableMemory: false
-                ),
-                sourceURL: HermesAgent.bundledSourceURL(),
-                executionMode: .inProcess,
-                modelProvider: AgentKitFoundationModelsProvider()
+            let agent = try HermesAgent.foundationModels(
+                maxTokens: 256,
+                temperature: 0,
+                enableSoul: false,
+                enableContext: false,
+                enableMemory: false
             )
             _ = try agent.newSession()
             let result = try agent.send("Use the file tools to create apple-foundation-smoke.txt containing exactly apple foundation tool smoke, then read it back and answer with its contents.") { event in

@@ -86,11 +86,13 @@ public actor AgentKitMLXModelProvider: AgentKitModelProvider {
         )
         let tools = (requestObject["tools"] as? [[String: Any]] ?? [])
             .compactMap(Self.toolSpec(from:))
+        let emitProviderDeltas = requestObject["agentkit_emit_provider_deltas"] as? Bool ?? true
 
         return try await chat(
             message: Self.prompt(from: messages),
             configuration: configuration,
             tools: tools,
+            emitProviderDeltas: emitProviderDeltas,
             onEvent: onEvent
         )
     }
@@ -99,6 +101,7 @@ public actor AgentKitMLXModelProvider: AgentKitModelProvider {
         message: String,
         configuration: AgentKitLocalLLMConfiguration,
         tools: [ToolSpec] = [],
+        emitProviderDeltas: Bool = true,
         onEvent: @escaping @Sendable (AgentKitEvent) -> Void
     ) async throws -> String {
         let started = Date()
@@ -124,7 +127,9 @@ public actor AgentKitMLXModelProvider: AgentKitModelProvider {
                     switch generation {
                     case .chunk(let chunk):
                         response += chunk
-                        onEvent(.init(kind: "delta", payload: chunk))
+                        if emitProviderDeltas {
+                            onEvent(.init(kind: "delta", payload: chunk))
+                        }
                     case .toolCall(let toolCall):
                         toolCalls.append(Self.openAIToolCallPayload(toolCall))
                     case .info:
@@ -346,6 +351,48 @@ public actor AgentKitMLXModelProvider: AgentKitModelProvider {
             return "{}"
         }
         return String(decoding: data, as: UTF8.self)
+    }
+}
+
+public extension HermesAgent {
+    static func localMLX(
+        model: String = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit,
+        maxTokens: Int = 128,
+        temperature: Double = 0.2,
+        enableSoul: Bool = true,
+        enableContext: Bool = true,
+        enableMemory: Bool = true,
+        sourceURL: URL? = nil,
+        shellEnvironment: (any AgentKitShellEnvironment)? = nil,
+        modelProvider: AgentKitMLXModelProvider = AgentKitMLXModelProvider()
+    ) throws -> HermesAgent {
+        try HermesAgent.localProvider(
+            configuration: .localMLX(
+                model: model,
+                maxTokens: maxTokens,
+                temperature: temperature,
+                enableSoul: enableSoul,
+                enableContext: enableContext,
+                enableMemory: enableMemory
+            ),
+            sourceURL: sourceURL,
+            modelProvider: modelProvider,
+            shellEnvironment: shellEnvironment
+        )
+    }
+
+    static func localMLX(
+        configuration: HermesAgentConfiguration,
+        sourceURL: URL? = nil,
+        shellEnvironment: (any AgentKitShellEnvironment)? = nil,
+        modelProvider: AgentKitMLXModelProvider = AgentKitMLXModelProvider()
+    ) throws -> HermesAgent {
+        try HermesAgent.localProvider(
+            configuration: configuration,
+            sourceURL: sourceURL,
+            modelProvider: modelProvider,
+            shellEnvironment: shellEnvironment
+        )
     }
 }
 

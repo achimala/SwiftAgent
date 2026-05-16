@@ -24,8 +24,23 @@ private final class FoundationModelsCompletionGate: @unchecked Sendable {
 public enum AgentKitFoundationModels {
     public static let modelIdentifier = "apple-foundation-models"
     public static let hermesContextLength = 64_000
-    public static let maximumPromptCharacters = 700
-    public static let maximumResponseTokens = 128
+}
+
+@available(iOS 26.0, macOS 26.0, visionOS 26.0, *)
+public struct AgentKitFoundationModelsConfiguration: Sendable {
+    public var maximumPromptCharacters: Int
+    public var maximumResponseTokens: Int
+    public var responseTimeoutSeconds: Double
+
+    public init(
+        maximumPromptCharacters: Int = 700,
+        maximumResponseTokens: Int = 128,
+        responseTimeoutSeconds: Double = 20
+    ) {
+        self.maximumPromptCharacters = maximumPromptCharacters
+        self.maximumResponseTokens = maximumResponseTokens
+        self.responseTimeoutSeconds = responseTimeoutSeconds
+    }
 }
 
 @available(iOS 26.0, macOS 26.0, visionOS 26.0, *)
@@ -53,7 +68,11 @@ public extension HermesAgentConfiguration {
 
 @available(iOS 26.0, macOS 26.0, visionOS 26.0, *)
 public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
-    public init() {}
+    private let configuration: AgentKitFoundationModelsConfiguration
+
+    public init(configuration: AgentKitFoundationModelsConfiguration = .init()) {
+        self.configuration = configuration
+    }
 
     public func complete(
         request: AgentKitModelRequest,
@@ -92,10 +111,9 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
                     session: session,
                     prompt: prompt,
                     options: options,
-                    seconds: 20
+                    seconds: configuration.responseTimeoutSeconds
                 )
                 onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_response_ready", started: started)))
-                onEvent(.init(kind: "delta", payload: text))
                 onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_done", started: started)))
                 onEvent(.init(kind: "done", payload: ""))
                 return try Self.responsePayload(finalResponse: text, toolCalls: [])
@@ -121,7 +139,7 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
                 session: toolSession,
                 prompt: prompt,
                 options: options,
-                seconds: 20
+                seconds: configuration.responseTimeoutSeconds
             )
             onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_tool_response_ready", started: started)))
         } catch {
@@ -132,44 +150,12 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
             .map { index, call in
                 call.openAIToolCall(index: index)
             }
-        if toolCalls.isEmpty {
-            onEvent(.init(kind: "delta", payload: responseContent))
-        }
         onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_done", started: started)))
         onEvent(.init(kind: "done", payload: ""))
         return try Self.responsePayload(
             finalResponse: toolCalls.isEmpty ? responseContent : "",
             toolCalls: toolCalls
         )
-    }
-
-    private func streamText(
-        prompt: String,
-        session: LanguageModelSession,
-        started: Date,
-        options: GenerationOptions,
-        onEvent: @escaping @Sendable (AgentKitEvent) -> Void
-    ) async throws -> String {
-        let stream = session.streamResponse(to: prompt, options: options)
-        var previous = ""
-        var emittedFirstDelta = false
-
-        for try await snapshot in stream {
-            let current = snapshot.content
-            if current.count > previous.count {
-                let delta = String(current.dropFirst(previous.count))
-                if !delta.isEmpty {
-                    if !emittedFirstDelta {
-                        emittedFirstDelta = true
-                        onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_first_delta", started: started)))
-                    }
-                    onEvent(.init(kind: "delta", payload: delta))
-                }
-            }
-            previous = current
-        }
-
-        return previous
     }
 
     private func promptText(messages: [[String: Any]], tools: [[String: Any]]) -> String {
@@ -196,7 +182,7 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
             )
         }
 
-        return Self.truncatePrompt(sections.joined(separator: "\n\n"))
+        return truncatePrompt(sections.joined(separator: "\n\n"))
     }
 
     private func messagesContainToolResults(_ messages: [[String: Any]]) -> Bool {
@@ -231,16 +217,19 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
         return GenerationOptions(
             sampling: temperature == 0 ? .greedy : nil,
             temperature: temperature,
-            maximumResponseTokens: min(maxTokens ?? AgentKitFoundationModels.maximumResponseTokens, AgentKitFoundationModels.maximumResponseTokens)
+            maximumResponseTokens: min(
+                maxTokens ?? configuration.maximumResponseTokens,
+                configuration.maximumResponseTokens
+            )
         )
     }
 
-    private static func truncatePrompt(_ prompt: String) -> String {
-        guard prompt.count > AgentKitFoundationModels.maximumPromptCharacters else {
+    private func truncatePrompt(_ prompt: String) -> String {
+        guard prompt.count > configuration.maximumPromptCharacters else {
             return prompt
         }
 
-        let suffix = prompt.suffix(AgentKitFoundationModels.maximumPromptCharacters)
+        let suffix = prompt.suffix(configuration.maximumPromptCharacters)
         return "[Earlier conversation omitted for the on-device model window.]\n\n\(suffix)"
     }
 
@@ -428,6 +417,31 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
         @unknown default:
             return "unknown availability"
         }
+    }
+}
+
+@available(iOS 26.0, macOS 26.0, visionOS 26.0, *)
+public extension HermesAgent {
+    static func foundationModels(
+        maxTokens: Int = 256,
+        temperature: Double = 0.2,
+        enableSoul: Bool = true,
+        enableContext: Bool = true,
+        enableMemory: Bool = true,
+        sourceURL: URL? = nil,
+        providerConfiguration: AgentKitFoundationModelsConfiguration = .init()
+    ) throws -> HermesAgent {
+        try HermesAgent.localProvider(
+            configuration: .foundationModels(
+                maxTokens: maxTokens,
+                temperature: temperature,
+                enableSoul: enableSoul,
+                enableContext: enableContext,
+                enableMemory: enableMemory
+            ),
+            sourceURL: sourceURL,
+            modelProvider: AgentKitFoundationModelsProvider(configuration: providerConfiguration)
+        )
     }
 }
 
