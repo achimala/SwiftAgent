@@ -49,6 +49,7 @@ char *HermesPython_ConfigureHermes(
     const char *base_url,
     const char *api_key,
     const char *model,
+    int context_length,
     int enable_soul,
     int enable_context,
     int enable_memory,
@@ -58,6 +59,7 @@ char *HermesPython_ConfigureHermes(
     (void)base_url;
     (void)api_key;
     (void)model;
+    (void)context_length;
     (void)enable_soul;
     (void)enable_context;
     (void)enable_memory;
@@ -816,6 +818,7 @@ char *HermesPython_ConfigureHermes(
     const char *base_url,
     const char *api_key,
     const char *model,
+    int context_length,
     int enable_soul,
     int enable_context,
     int enable_memory,
@@ -829,10 +832,11 @@ char *HermesPython_ConfigureHermes(
 
     PyGILState_STATE gil = PyGILState_Ensure();
     PyObject *args = Py_BuildValue(
-        "(sssiii)",
+        "(sssiiii)",
         base_url ? base_url : "",
         api_key ? api_key : "",
         model ? model : "",
+        context_length,
         enable_soul ? 1 : 0,
         enable_context ? 1 : 0,
         enable_memory ? 1 : 0

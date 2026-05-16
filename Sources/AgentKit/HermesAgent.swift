@@ -6,6 +6,7 @@ public struct HermesAgentConfiguration: Sendable {
     public var baseURL: String
     public var apiKey: String
     public var model: String
+    public var contextLength: Int?
     public var enableSoul: Bool
     public var enableContext: Bool
     public var enableMemory: Bool
@@ -16,6 +17,7 @@ public struct HermesAgentConfiguration: Sendable {
         baseURL: String = "https://api.openai.com/v1",
         apiKey: String,
         model: String,
+        contextLength: Int? = nil,
         enableSoul: Bool = true,
         enableContext: Bool = true,
         enableMemory: Bool = true,
@@ -25,6 +27,7 @@ public struct HermesAgentConfiguration: Sendable {
         self.baseURL = baseURL
         self.apiKey = apiKey
         self.model = model
+        self.contextLength = contextLength
         self.enableSoul = enableSoul
         self.enableContext = enableContext
         self.enableMemory = enableMemory
@@ -36,6 +39,7 @@ public struct HermesAgentConfiguration: Sendable {
         apiKey: String,
         model: String = "gpt-4.1-mini",
         baseURL: String = "https://api.openai.com/v1",
+        contextLength: Int? = nil,
         enableSoul: Bool = true,
         enableContext: Bool = true,
         enableMemory: Bool = true
@@ -44,6 +48,7 @@ public struct HermesAgentConfiguration: Sendable {
             baseURL: baseURL,
             apiKey: apiKey,
             model: model,
+            contextLength: contextLength,
             enableSoul: enableSoul,
             enableContext: enableContext,
             enableMemory: enableMemory
@@ -55,6 +60,7 @@ public struct HermesAgentConfiguration: Sendable {
             baseURL: baseURL,
             apiKey: apiKey,
             model: model,
+            contextLength: contextLength,
             enableSoul: enableSoul,
             enableContext: enableContext,
             enableMemory: enableMemory

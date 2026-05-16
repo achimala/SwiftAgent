@@ -61,10 +61,17 @@ public enum AgentKitHermesXPC {
 }
 
 public final class AgentKitHermesXPCService: NSObject, AgentKitHermesXPCServiceProtocol {
-    private let runtime: HermesAgentRuntime
+    public typealias ModelProviderResolver = @Sendable (HermesAgentConfiguration) -> (any AgentKitModelProvider)?
 
-    public init(runtime: HermesAgentRuntime = HermesAgentRuntime()) {
+    private let runtime: HermesAgentRuntime
+    private let modelProviderResolver: ModelProviderResolver
+
+    public init(
+        runtime: HermesAgentRuntime = HermesAgentRuntime(),
+        modelProviderResolver: @escaping ModelProviderResolver = { _ in nil }
+    ) {
         self.runtime = runtime
+        self.modelProviderResolver = modelProviderResolver
     }
 
     public func prepare(
@@ -112,6 +119,9 @@ public final class AgentKitHermesXPCService: NSObject, AgentKitHermesXPCServiceP
         replyWithString(reply) {
             let agentConfiguration = try HermesAgentConfiguration(xpcDictionary: configuration)
             agentConfiguration.applyRuntimeEnvironment()
+            if let modelProvider = modelProviderResolver(agentConfiguration) {
+                runtime.setModelProvider(modelProvider)
+            }
             let eventSink = NSXPCConnection.current()?.remoteObjectProxyWithErrorHandler { error in
                 NSLog("AgentKit Hermes XPC event sink error: %@", String(describing: error))
             } as? AgentKitHermesXPCEventSinkProtocol
@@ -228,6 +238,9 @@ extension HermesAgentConfiguration {
         if let localMLXTemperature {
             dictionary["localMLXTemperature"] = localMLXTemperature
         }
+        if let contextLength {
+            dictionary["contextLength"] = contextLength
+        }
         return dictionary as NSDictionary
     }
 
@@ -243,6 +256,7 @@ extension HermesAgentConfiguration {
             baseURL: baseURL,
             apiKey: apiKey,
             model: model,
+            contextLength: dictionary["contextLength"] as? Int,
             enableSoul: dictionary["enableSoul"] as? Bool ?? true,
             enableContext: dictionary["enableContext"] as? Bool ?? true,
             enableMemory: dictionary["enableMemory"] as? Bool ?? true,

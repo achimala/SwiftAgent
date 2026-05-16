@@ -38,6 +38,7 @@ public struct HermesChatConfiguration: Sendable {
     public var baseURL: String
     public var apiKey: String
     public var model: String
+    public var contextLength: Int?
     public var enableSoul: Bool
     public var enableContext: Bool
     public var enableMemory: Bool
@@ -46,6 +47,7 @@ public struct HermesChatConfiguration: Sendable {
         baseURL: String = "https://api.openai.com/v1",
         apiKey: String = "",
         model: String = "dummy-model",
+        contextLength: Int? = nil,
         enableSoul: Bool = true,
         enableContext: Bool = true,
         enableMemory: Bool = true
@@ -53,6 +55,7 @@ public struct HermesChatConfiguration: Sendable {
         self.baseURL = baseURL
         self.apiKey = apiKey
         self.model = model
+        self.contextLength = contextLength
         self.enableSoul = enableSoul
         self.enableContext = enableContext
         self.enableMemory = enableMemory

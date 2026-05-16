@@ -290,6 +290,7 @@ struct ContentView: View {
                 backend: HermesExtensionProcessBackend(appExtensionPoint: .agentKitHermesWorker)
             )
         }
+
         return try HermesAgent(configuration: configuration)
     }
 

@@ -32,8 +32,7 @@ struct ChatRow: View {
         }
         .padding(.horizontal, horizontalPadding)
         .padding(.vertical, verticalPadding)
-        .background(background)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .background(background, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .frame(maxWidth: maxWidth, alignment: entry.kind == .user ? .trailing : .leading)
     }
 

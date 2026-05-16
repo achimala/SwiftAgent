@@ -3,9 +3,29 @@ import AgentKitCore
 import Foundation
 import FoundationModels
 
+private enum FoundationModelsProviderError: Error {
+    case timedOut
+}
+
+private final class FoundationModelsCompletionGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var completed = false
+
+    func complete(_ action: () -> Void) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !completed else { return }
+        completed = true
+        action()
+    }
+}
+
 @available(iOS 26.0, macOS 26.0, visionOS 26.0, *)
 public enum AgentKitFoundationModels {
-    public static let hermesCompatibilityModel = "gpt-4.1-mini"
+    public static let modelIdentifier = "apple-foundation-models"
+    public static let hermesContextLength = 64_000
+    public static let maximumPromptCharacters = 700
+    public static let maximumResponseTokens = 128
 }
 
 @available(iOS 26.0, macOS 26.0, visionOS 26.0, *)
@@ -20,7 +40,8 @@ public extension HermesAgentConfiguration {
         HermesAgentConfiguration(
             baseURL: "hermes-foundation-models://chat",
             apiKey: "foundation-models",
-            model: AgentKitFoundationModels.hermesCompatibilityModel,
+            model: AgentKitFoundationModels.modelIdentifier,
+            contextLength: AgentKitFoundationModels.hermesContextLength,
             enableSoul: enableSoul,
             enableContext: enableContext,
             enableMemory: enableMemory,
@@ -53,49 +74,71 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
 
         let messages = requestObject["messages"] as? [[String: Any]] ?? []
         let requestedTools = requestObject["tools"] as? [[String: Any]] ?? []
-        let tools = messagesContainToolResults(messages) ? [] : requestedTools
+        let tools = messagesContainToolResults(messages) || !Self.shouldEnableTools(for: messages)
+            ? []
+            : requestedTools
         let options = generationOptions(from: requestObject)
         let prompt = promptText(messages: messages, tools: tools)
-        let session = LanguageModelSession(
-            model: model,
-            instructions: instructionsText(hasTools: !tools.isEmpty)
-        )
-        session.prewarm()
+        onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_prompt_ready", started: started)))
 
         if tools.isEmpty {
-            let text = try await streamText(
-                prompt: prompt,
-                session: session,
-                options: options,
-                onEvent: onEvent
-            )
-            onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_done", started: started)))
-            onEvent(.init(kind: "done", payload: ""))
-            return try Self.responsePayload(finalResponse: text, toolCalls: [])
+            do {
+                let session = LanguageModelSession(
+                    model: model,
+                    instructions: instructionsText(hasTools: false)
+                )
+                onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_session_created", started: started)))
+                let text = try await respondContentWithTimeout(
+                    session: session,
+                    prompt: prompt,
+                    options: options,
+                    seconds: 20
+                )
+                onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_response_ready", started: started)))
+                onEvent(.init(kind: "delta", payload: text))
+                onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_done", started: started)))
+                onEvent(.init(kind: "done", payload: ""))
+                return try Self.responsePayload(finalResponse: text, toolCalls: [])
+            } catch {
+                return try Self.responsePayload(finalResponse: Self.rejectionMessage(for: error), toolCalls: [])
+            }
         }
 
         let recorder = FoundationToolCallRecorder()
         let foundationTools = tools.filter(Self.isSupportedFoundationTool).compactMap { tool in
             try? Self.foundationTool(from: tool, recorder: recorder)
         }
+        onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_tools_ready", started: started)))
         let toolSession = LanguageModelSession(
             model: model,
             tools: foundationTools,
             instructions: instructionsText(hasTools: true)
         )
-        let response = try await toolSession.respond(to: prompt, options: options)
+        onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_tool_session_created", started: started)))
+        let responseContent: String
+        do {
+            responseContent = try await respondContentWithTimeout(
+                session: toolSession,
+                prompt: prompt,
+                options: options,
+                seconds: 20
+            )
+            onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_tool_response_ready", started: started)))
+        } catch {
+            return try Self.responsePayload(finalResponse: Self.rejectionMessage(for: error), toolCalls: [])
+        }
         let toolCalls = await recorder.toolCalls()
             .enumerated()
             .map { index, call in
                 call.openAIToolCall(index: index)
             }
         if toolCalls.isEmpty {
-            onEvent(.init(kind: "delta", payload: response.content))
+            onEvent(.init(kind: "delta", payload: responseContent))
         }
         onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_done", started: started)))
         onEvent(.init(kind: "done", payload: ""))
         return try Self.responsePayload(
-            finalResponse: toolCalls.isEmpty ? response.content : "",
+            finalResponse: toolCalls.isEmpty ? responseContent : "",
             toolCalls: toolCalls
         )
     }
@@ -103,17 +146,23 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
     private func streamText(
         prompt: String,
         session: LanguageModelSession,
+        started: Date,
         options: GenerationOptions,
         onEvent: @escaping @Sendable (AgentKitEvent) -> Void
     ) async throws -> String {
         let stream = session.streamResponse(to: prompt, options: options)
         var previous = ""
+        var emittedFirstDelta = false
 
         for try await snapshot in stream {
             let current = snapshot.content
             if current.count > previous.count {
                 let delta = String(current.dropFirst(previous.count))
                 if !delta.isEmpty {
+                    if !emittedFirstDelta {
+                        emittedFirstDelta = true
+                        onEvent(.init(kind: "timing", payload: timingPayload("foundation_models_first_delta", started: started)))
+                    }
                     onEvent(.init(kind: "delta", payload: delta))
                 }
             }
@@ -126,8 +175,9 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
     private func promptText(messages: [[String: Any]], tools: [[String: Any]]) -> String {
         var sections: [String] = []
         sections.append("Conversation:")
-        for message in messages {
+        for message in messages.suffix(8) {
             let role = message["role"] as? String ?? "user"
+            guard role != "system", role != "developer" else { continue }
             let content = Self.contentText(message["content"])
             guard !content.isEmpty else { continue }
             sections.append("\(role): \(content)")
@@ -146,7 +196,7 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
             )
         }
 
-        return sections.joined(separator: "\n\n")
+        return Self.truncatePrompt(sections.joined(separator: "\n\n"))
     }
 
     private func messagesContainToolResults(_ messages: [[String: Any]]) -> Bool {
@@ -181,8 +231,17 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
         return GenerationOptions(
             sampling: temperature == 0 ? .greedy : nil,
             temperature: temperature,
-            maximumResponseTokens: maxTokens
+            maximumResponseTokens: min(maxTokens ?? AgentKitFoundationModels.maximumResponseTokens, AgentKitFoundationModels.maximumResponseTokens)
         )
+    }
+
+    private static func truncatePrompt(_ prompt: String) -> String {
+        guard prompt.count > AgentKitFoundationModels.maximumPromptCharacters else {
+            return prompt
+        }
+
+        let suffix = prompt.suffix(AgentKitFoundationModels.maximumPromptCharacters)
+        return "[Earlier conversation omitted for the on-device model window.]\n\n\(suffix)"
     }
 
     private static func contentText(_ content: Any?) -> String {
@@ -208,6 +267,19 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
         return String(decoding: data, as: UTF8.self)
     }
 
+    private static func rejectionMessage(for error: Error) -> String {
+        if let providerError = error as? FoundationModelsProviderError, providerError == .timedOut {
+            return "Apple Foundation Models did not return in time. Try a shorter request or use a cloud model for heavier work."
+        }
+        let message = String(describing: error)
+        if message.localizedCaseInsensitiveContains("context")
+            || message.localizedCaseInsensitiveContains("token")
+        {
+            return "Apple Foundation Models rejected this turn because the prompt is too large for the on-device model window. Try a new chat or a shorter request."
+        }
+        return "Apple Foundation Models could not answer this turn: \(message)"
+    }
+
     private static func foundationTool(
         from tool: [String: Any],
         recorder: FoundationToolCallRecorder
@@ -228,6 +300,70 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
         let function = tool["function"] as? [String: Any] ?? [:]
         let name = function["name"] as? String ?? ""
         return ["read_file", "write_file", "terminal"].contains(name)
+    }
+
+    private static func shouldEnableTools(for messages: [[String: Any]]) -> Bool {
+        guard let lastUserMessage = messages.reversed().first(where: { ($0["role"] as? String) == "user" }) else {
+            return false
+        }
+        let text = contentText(lastUserMessage["content"]).lowercased()
+        let words = Set(
+            text.split { !$0.isLetter && !$0.isNumber }
+                .map(String.init)
+        )
+        let toolHints: Set<String> = [
+            "read",
+            "write",
+            "file",
+            "create",
+            "save",
+            "search",
+            "inspect",
+            "run",
+            "command",
+            "terminal",
+            "shell",
+        ]
+        return !words.isDisjoint(with: toolHints)
+    }
+
+    private func respondContentWithTimeout(
+        session: LanguageModelSession,
+        prompt: String,
+        options: GenerationOptions,
+        seconds: Double
+    ) async throws -> String {
+        let responseTask = Task {
+            try await session.respond(to: prompt, options: options).content
+        }
+        let gate = FoundationModelsCompletionGate()
+
+        return try await withCheckedThrowingContinuation { continuation in
+            Task {
+                do {
+                    let response = try await responseTask.value
+                    gate.complete {
+                        continuation.resume(returning: response)
+                    }
+                } catch {
+                    gate.complete {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
+
+            Task {
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                    gate.complete {
+                        responseTask.cancel()
+                        continuation.resume(throwing: FoundationModelsProviderError.timedOut)
+                    }
+                } catch {
+                    // The timeout task was cancelled because the model returned first.
+                }
+            }
+        }
     }
 
     private static func compactSchema(for toolName: String) throws -> GenerationSchema {
@@ -255,59 +391,6 @@ public actor AgentKitFoundationModelsProvider: AgentKitModelProvider {
             properties: properties
         )
         return try GenerationSchema(root: root, dependencies: [])
-    }
-
-    private static func generationSchema(name: String, jsonSchema: [String: Any]) throws -> GenerationSchema {
-        let root = dynamicSchema(name: name, jsonSchema: jsonSchema)
-        return try GenerationSchema(root: root, dependencies: [])
-    }
-
-    private static func dynamicSchema(name: String, jsonSchema: [String: Any]) -> DynamicGenerationSchema {
-        let type = jsonSchema["type"] as? String
-        if type == "object" || jsonSchema["properties"] is [String: Any] {
-            let propertiesObject = jsonSchema["properties"] as? [String: Any] ?? [:]
-            let required = Set(jsonSchema["required"] as? [String] ?? [])
-            let properties = propertiesObject.keys.sorted().map { propertyName in
-                let propertySchema = propertiesObject[propertyName] as? [String: Any] ?? [:]
-                return DynamicGenerationSchema.Property(
-                    name: propertyName,
-                    description: propertySchema["description"] as? String,
-                    schema: dynamicSchema(name: "\(name)_\(propertyName)", jsonSchema: propertySchema),
-                    isOptional: !required.contains(propertyName)
-                )
-            }
-            return DynamicGenerationSchema(
-                name: name,
-                description: jsonSchema["description"] as? String,
-                properties: properties
-            )
-        }
-
-        if type == "array" {
-            let itemSchema = jsonSchema["items"] as? [String: Any] ?? ["type": "string"]
-            return DynamicGenerationSchema(
-                arrayOf: dynamicSchema(name: "\(name)_Item", jsonSchema: itemSchema)
-            )
-        }
-
-        if let choices = jsonSchema["enum"] as? [String], !choices.isEmpty {
-            return DynamicGenerationSchema(
-                name: name,
-                description: jsonSchema["description"] as? String,
-                anyOf: choices
-            )
-        }
-
-        switch type {
-        case "boolean":
-            return DynamicGenerationSchema(type: Bool.self)
-        case "integer":
-            return DynamicGenerationSchema(type: Int.self)
-        case "number":
-            return DynamicGenerationSchema(type: Double.self)
-        default:
-            return DynamicGenerationSchema(type: String.self)
-        }
     }
 
     private static func errorPayload(_ message: String) -> String {

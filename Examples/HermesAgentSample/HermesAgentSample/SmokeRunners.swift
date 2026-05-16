@@ -11,10 +11,58 @@ enum SampleSmokeRunners {
         await HermesMLXSessionCycleSmokeRunner.runIfRequested()
         await HermesMLXStressSmokeRunner.runIfRequested()
         await HermesMLXToolSmokeRunner.runIfRequested()
+        await FoundationModelsProviderSmokeRunner.runIfRequested()
         await HermesFoundationModelsSmokeRunner.runIfRequested()
         await HermesFoundationModelsToolSmokeRunner.runIfRequested()
         await AgentKitISHSmokeRunner.runIfRequested()
         await HermesExtensionProbeSmokeRunner.runIfRequested()
+    }
+}
+
+private enum FoundationModelsProviderSmokeRunner {
+    private static let argument = "--foundation-models-provider-smoke"
+
+    static func runIfRequested() async {
+        guard ProcessInfo.processInfo.arguments.contains(argument) else { return }
+
+        let recorder = SmokeRecorder(filename: "foundation-models-provider-smoke.log")
+        await recorder.write("start")
+
+        do {
+            guard #available(iOS 26.0, *) else {
+                await recorder.write("done skipped=requires-ios-26")
+                return
+            }
+
+            let request: [String: Any] = [
+                "model": AgentKitFoundationModels.modelIdentifier,
+                "messages": [
+                    [
+                        "role": "user",
+                        "content": "In one short sentence, say Apple Foundation Models direct provider smoke is working.",
+                    ],
+                ],
+                "tools": [],
+                "max_tokens": 48,
+                "temperature": 0.1,
+                "stream": true,
+            ]
+            let data = try JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])
+            let rawJSON = String(decoding: data, as: UTF8.self)
+            let provider = AgentKitFoundationModelsProvider()
+            let result = try await provider.complete(
+                request: AgentKitModelRequest(rawJSON: rawJSON)
+            ) { event in
+                Task {
+                    await recorder.write("event kind=\(event.kind) payload=\(event.payload)")
+                }
+            }
+            await recorder.write("result \(result)")
+            await recorder.write("done ok")
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            await recorder.write("done error=\(message)")
+        }
     }
 }
 
@@ -310,7 +358,7 @@ private enum HermesFoundationModelsSmokeRunner {
                 modelProvider: AgentKitFoundationModelsProvider()
             )
             _ = try agent.newSession()
-            let result = try agent.send("In one short sentence, say whether Hermes is running through Apple Foundation Models.") { event in
+            let result = try agent.send("Reply exactly: Hermes is running through Apple Foundation Models.") { event in
                 Task {
                     await recorder.write("event kind=\(event.kind) payload=\(event.payload)")
                 }

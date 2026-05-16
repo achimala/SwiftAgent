@@ -100,6 +100,34 @@ else
   exit 1
 fi
 
+HOST_PYTHON=""
+if [ -n "${AGENTKIT_HOST_PYTHON:-}" ]; then
+  HOST_PYTHON_CANDIDATES="$AGENTKIT_HOST_PYTHON"
+else
+  HOST_PYTHON_CANDIDATES="/opt/homebrew/bin/python3.14 /opt/homebrew/bin/python3 /usr/local/bin/python3.14 /usr/local/bin/python3 python3.14 python3"
+fi
+for CANDIDATE in $HOST_PYTHON_CANDIDATES; do
+  if ! command -v "$CANDIDATE" >/dev/null 2>&1; then
+    continue
+  fi
+  CANDIDATE_CACHE_TAG="$("$CANDIDATE" - <<'PY'
+import sys
+print(sys.implementation.cache_tag or "")
+PY
+)"
+  if [ "$CANDIDATE_CACHE_TAG" = "cpython-314" ]; then
+    HOST_PYTHON="$CANDIDATE"
+    break
+  fi
+done
+
+if [ -n "$HOST_PYTHON" ]; then
+  echo "Precompiling AgentKit Hermes Python payload with $HOST_PYTHON"
+  "$HOST_PYTHON" -m compileall -q "$DESTINATION/hermes"
+else
+  echo "Skipping Hermes bytecode precompile: no cpython-314 host interpreter was found"
+fi
+
 export EXPANDED_CODE_SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
 export EXPANDED_CODE_SIGN_IDENTITY_NAME="${EXPANDED_CODE_SIGN_IDENTITY_NAME:-Sign to Run Locally}"
 export ARCHS="${ARCHS:-${NATIVE_ARCH_ACTUAL:-$(uname -m)}}"

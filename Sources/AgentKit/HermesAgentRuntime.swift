@@ -29,6 +29,7 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
     private var initialized = false
     private var shellEnvironment: any AgentKitShellEnvironment = AgentKitISHShellEnvironment()
     private var modelProvider: any AgentKitModelProvider = UnavailableLocalModelProvider()
+    private var activeEventCallback: (@Sendable (AgentKitEvent) -> Void)?
 
     public init() {}
 
@@ -109,6 +110,7 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
         setenv("HERMES_IOS_WORKSPACE", workspace.path, 1)
         setenv("TERMINAL_CWD", workspace.path, 1)
         setenv("HERMES_SESSION_SOURCE", "ios", 1)
+        setenv("PYTHONDONTWRITEBYTECODE", "1", 1)
     }
 
     private func configureCertificateEnvironment(appPython: URL) {
@@ -223,6 +225,7 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
             configuration.baseURL,
             configuration.apiKey,
             configuration.model,
+            Int32(configuration.contextLength ?? 0),
             configuration.enableSoul ? 1 : 0,
             configuration.enableContext ? 1 : 0,
             configuration.enableMemory ? 1 : 0,
@@ -264,7 +267,9 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
 
         let box = HermesStreamCallbackBox(callback: onEvent)
         let opaqueBox = Unmanaged.passRetained(box).toOpaque()
+        setActiveEventCallback(onEvent)
         defer {
+            setActiveEventCallback(nil)
             Unmanaged<HermesStreamCallbackBox>.fromOpaque(opaqueBox).release()
         }
 
@@ -348,6 +353,19 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
         return modelProvider
     }
 
+    private func setActiveEventCallback(_ callback: (@Sendable (AgentKitEvent) -> Void)?) {
+        lock.lock()
+        defer { lock.unlock() }
+        activeEventCallback = callback
+    }
+
+    private func emitActiveEvent(_ event: AgentKitEvent) {
+        lock.lock()
+        let callback = activeEventCallback
+        lock.unlock()
+        callback?(event)
+    }
+
     private static func pythonLiteral(_ value: String) -> String {
         let escaped = value
             .replacingOccurrences(of: "\\", with: "\\\\")
@@ -390,6 +408,10 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
         let requestText = requestJSON.map(String.init(cString:)) ?? "{}"
         let runtime = Unmanaged<HermesAgentRuntime>.fromOpaque(context).takeUnretainedValue()
         let provider = runtime.currentModelProvider()
+        let start = Date()
+        runtime.emitActiveEvent(
+            AgentKitEvent(kind: "timing", payload: HermesAgentRuntime.timingPayload(label: "local_llm_request_start", start: start))
+        )
         let semaphore = DispatchSemaphore(value: 0)
         final class Box: @unchecked Sendable {
             var value: String?
@@ -400,15 +422,26 @@ public final class HermesAgentRuntime: AgentKitAgentImplementation, @unchecked S
             do {
                 result.value = try await provider.complete(
                     request: AgentKitModelRequest(rawJSON: requestText),
-                    onEvent: { _ in }
+                    onEvent: { event in
+                        runtime.emitActiveEvent(event)
+                    }
+                )
+                runtime.emitActiveEvent(
+                    AgentKitEvent(kind: "timing", payload: HermesAgentRuntime.timingPayload(label: "local_llm_request_done", start: start))
                 )
             } catch {
+                runtime.emitActiveEvent(
+                    AgentKitEvent(kind: "timing", payload: HermesAgentRuntime.timingPayload(label: "local_llm_request_error", start: start, detail: String(describing: error)))
+                )
                 result.value = HermesAgentRuntime.localLLMError(String(describing: error))
             }
             semaphore.signal()
         }
 
         if semaphore.wait(timeout: .now() + 300) == .timedOut {
+            runtime.emitActiveEvent(
+                AgentKitEvent(kind: "timing", payload: HermesAgentRuntime.timingPayload(label: "local_llm_request_timeout", start: start))
+            )
             return strdup(HermesAgentRuntime.localLLMError("Local model request timed out."))
         }
         return strdup(result.value ?? HermesAgentRuntime.localLLMError("Local model request returned no result."))

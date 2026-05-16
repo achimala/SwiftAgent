@@ -6,6 +6,7 @@ import shlex
 import sys
 import time
 import traceback
+import types
 import uuid
 
 _hermes_source_path = None
@@ -19,11 +20,14 @@ _agent_config = {
     "base_url": "https://api.openai.com/v1",
     "api_key": "dummy-key",
     "model": "dummy-model",
+    "context_length": 0,
     "enable_soul": True,
     "enable_context": True,
     "enable_memory": True,
 }
 
+sys.dont_write_bytecode = True
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
 os.environ.setdefault("HERMES_API_TIMEOUT", "5")
 os.environ.setdefault("HERMES_STREAM_READ_TIMEOUT", "5")
 os.environ.setdefault("HERMES_STREAM_STALE_TIMEOUT", "5")
@@ -39,12 +43,63 @@ IOS_RUNTIME_PROMPT = """iOS runtime notes:
 
 
 def _install_ios_terminal_bridge():
+    started = time.monotonic()
+
+    def emit_bridge_step(label):
+        try:
+            _emit_stream(
+                "timing",
+                json.dumps(
+                    {
+                        "label": label,
+                        "elapsed_ms": round((time.monotonic() - started) * 1000, 1),
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+        except Exception:
+            pass
+
+    emit_bridge_step("agentkit_bridge_start")
     try:
         import _hermes_agentkit
+        emit_bridge_step("agentkit_bridge_native_imported")
         from tools import terminal_tool
+        emit_bridge_step("agentkit_bridge_terminal_tool_imported")
+        import tools.registry as registry_module
         from tools.registry import invalidate_check_fn_cache, registry
+        emit_bridge_step("agentkit_bridge_registry_imported")
     except Exception:
         return False
+
+    def _ios_discover_builtin_tools(tools_dir=None):
+        imported = []
+        for module_name in (
+            "tools.terminal_tool",
+            "tools.file_tools",
+            "tools.memory_tool",
+            "tools.clarify_tool",
+        ):
+            try:
+                importlib.import_module(module_name)
+                imported.append(module_name)
+            except Exception:
+                pass
+        return imported
+
+    registry_module.discover_builtin_tools = _ios_discover_builtin_tools
+    emit_bridge_step("agentkit_bridge_discovery_patched")
+
+    try:
+        import hermes_cli.plugins as plugins
+
+        plugins.discover_plugins = lambda *args, **kwargs: None
+        plugins.invoke_hook = lambda *args, **kwargs: []
+        plugins.get_pre_tool_call_block_message = lambda *args, **kwargs: None
+        plugins.get_plugin_context_engine = lambda *args, **kwargs: None
+        emit_bridge_step("agentkit_bridge_plugins_disabled")
+    except Exception:
+        pass
 
     workspace = os.environ.get("HERMES_IOS_WORKSPACE")
     if not workspace:
@@ -56,6 +111,7 @@ def _install_ios_terminal_bridge():
             "ShellWorkspace",
         )
     os.makedirs(workspace, exist_ok=True)
+    emit_bridge_step("agentkit_bridge_workspace_ready")
     os.environ["TERMINAL_CWD"] = workspace
     os.environ["TERMINAL_ENV"] = "ios"
 
@@ -114,6 +170,7 @@ def _install_ios_terminal_bridge():
             )
 
     env = IOSAgentKitEnvironment(workspace)
+    emit_bridge_step("agentkit_bridge_env_ready")
 
     def ios_terminal_tool(
         command,
@@ -150,16 +207,18 @@ def _install_ios_terminal_bridge():
 
     terminal_tool.terminal_tool = ios_terminal_tool
     terminal_tool.check_terminal_requirements = lambda: True
+    emit_bridge_step("agentkit_bridge_terminal_patched")
     try:
         with terminal_tool._env_lock:
             terminal_tool._active_environments["default"] = env
             terminal_tool._last_activity["default"] = 0
     except Exception:
         pass
+    emit_bridge_step("agentkit_bridge_active_env_ready")
 
     try:
-        import model_tools
         from tools import file_tools
+        emit_bridge_step("agentkit_bridge_file_tools_imported")
 
         registry.deregister("terminal")
         registry.register(
@@ -171,6 +230,7 @@ def _install_ios_terminal_bridge():
             emoji="\U0001f4bb",
             max_result_size_chars=100_000,
         )
+        emit_bridge_step("agentkit_bridge_terminal_registered")
 
         def _ios_host_path(path):
             raw = str(path or "")
@@ -243,6 +303,7 @@ def _install_ios_terminal_bridge():
             emoji="\U0001f4d6",
             max_result_size_chars=100_000,
         )
+        emit_bridge_step("agentkit_bridge_read_registered")
         registry.deregister("write_file")
         registry.register(
             name="write_file",
@@ -253,10 +314,14 @@ def _install_ios_terminal_bridge():
             emoji="\U0000270d\U0000fe0f",
             max_result_size_chars=100_000,
         )
+        emit_bridge_step("agentkit_bridge_write_registered")
         registry.deregister("process")
         registry.deregister("search_files")
         invalidate_check_fn_cache()
-        model_tools._clear_tool_defs_cache()
+        model_tools = sys.modules.get("model_tools")
+        if model_tools is not None:
+            model_tools._clear_tool_defs_cache()
+        emit_bridge_step("agentkit_bridge_done")
     except Exception:
         pass
     return True
@@ -265,6 +330,107 @@ def _install_ios_terminal_bridge():
 def _is_local_model_base_url(base_url):
     value = str(base_url or "")
     return value.startswith("hermes-local-mlx://") or value.startswith("hermes-foundation-models://")
+
+
+def _agentkit_provider_key(base_url):
+    value = str(base_url or "")
+    if value.startswith("hermes-foundation-models://"):
+        return "agentkit-foundation-models"
+    if value.startswith("hermes-local-mlx://"):
+        return "agentkit-local-mlx"
+    return ""
+
+
+def _agentkit_provider_name(base_url):
+    value = str(base_url or "")
+    if value.startswith("hermes-foundation-models://"):
+        return "AgentKit Foundation Models"
+    if value.startswith("hermes-local-mlx://"):
+        return "AgentKit Local MLX"
+    return "AgentKit Local Model"
+
+
+def _ensure_agentkit_model_config():
+    base_url = _agent_config.get("base_url") or ""
+    if not _is_local_model_base_url(base_url):
+        return
+
+    model = (_agent_config.get("model") or "").strip()
+    if not model:
+        return
+
+    context_length = int(_agent_config.get("context_length") or 0)
+    if context_length <= 0:
+        context_length = 64_000
+
+    try:
+        import yaml
+        from hermes_cli.config import get_config_path
+        import hermes_cli.config as hermes_config
+    except Exception:
+        return
+
+    config_path = get_config_path()
+    os.makedirs(os.path.dirname(str(config_path)), exist_ok=True)
+    try:
+        with open(config_path, "r", encoding="utf-8") as handle:
+            config = yaml.safe_load(handle) or {}
+    except FileNotFoundError:
+        config = {}
+    except Exception:
+        return
+
+    if not isinstance(config, dict):
+        config = {}
+
+    providers = config.get("providers")
+    if not isinstance(providers, dict):
+        providers = {}
+        config["providers"] = providers
+
+    provider_key = _agentkit_provider_key(base_url)
+    provider = providers.get(provider_key)
+    if not isinstance(provider, dict):
+        provider = {}
+        providers[provider_key] = provider
+
+    provider.update(
+        {
+            "name": _agentkit_provider_name(base_url),
+            "base_url": base_url,
+            "api_key": _agent_config.get("api_key") or "agentkit-local",
+            "api_mode": "chat_completions",
+            "model": model,
+        }
+    )
+
+    models = provider.get("models")
+    if not isinstance(models, dict):
+        models = {}
+        provider["models"] = models
+    model_config = models.get(model)
+    if not isinstance(model_config, dict):
+        model_config = {}
+        models[model] = model_config
+    model_config["context_length"] = context_length
+
+    model_section = config.get("model")
+    if not isinstance(model_section, dict):
+        model_section = {}
+        config["model"] = model_section
+    model_section["context_length"] = context_length
+
+    try:
+        with open(config_path, "w", encoding="utf-8") as handle:
+            yaml.safe_dump(config, handle, sort_keys=False)
+    except Exception:
+        return
+
+    try:
+        hermes_config._LOAD_CONFIG_CACHE.clear()
+        hermes_config._RAW_CONFIG_CACHE.clear()
+    except Exception:
+        pass
 
 
 def _local_mlx_content_to_text(content):
@@ -525,6 +691,37 @@ def _configure_local_mlx_client(run_agent):
         run_agent._OPENAI_CLS_CACHE = _original_run_agent_openai_cache
 
 
+def _patch_local_agent_runtime(run_agent, agent_class):
+    if not _is_local_model_base_url(_agent_config["base_url"]):
+        return
+
+    def _rough_text_size(value):
+        try:
+            return len(json.dumps(value, ensure_ascii=False, default=str))
+        except Exception:
+            return len(str(value))
+
+    def _agentkit_estimate_messages_tokens(messages):
+        return max(1, min(64_000, (_rough_text_size(messages) // 4) + 1))
+
+    def _agentkit_estimate_request_tokens(messages, system_prompt="", tools=None):
+        total_size = _rough_text_size(messages) + len(str(system_prompt or "")) + _rough_text_size(tools or [])
+        return max(1, min(64_000, (total_size // 4) + 1))
+
+    run_agent.estimate_messages_tokens_rough = _agentkit_estimate_messages_tokens
+    run_agent.estimate_request_tokens_rough = _agentkit_estimate_request_tokens
+    agent_class._create_request_openai_client = (
+        lambda self, reason="", api_kwargs=None: _LocalMLXOpenAI(
+            api_key=_agent_config["api_key"],
+            base_url=_agent_config["base_url"],
+        )
+    )
+    agent_class._close_request_openai_client = lambda self, client, reason="": None
+    agent_class._build_keepalive_http_client = staticmethod(lambda *args, **kwargs: None)
+    agent_class._cleanup_dead_connections = lambda self: False
+    agent_class._check_compression_model_feasibility = lambda self: None
+
+
 def python_probe():
     return json.dumps(
         {
@@ -576,6 +773,7 @@ def hermes_configure(
     base_url="",
     api_key="",
     model="",
+    context_length=0,
     enable_soul=True,
     enable_context=True,
     enable_memory=True,
@@ -586,6 +784,7 @@ def hermes_configure(
         "base_url": base_url.strip() or "https://api.openai.com/v1",
         "api_key": api_key.strip() or "dummy-key",
         "model": model.strip() or "dummy-model",
+        "context_length": int(context_length or 0),
         "enable_soul": bool(enable_soul),
         "enable_context": bool(enable_context),
         "enable_memory": bool(enable_memory),
@@ -602,6 +801,7 @@ def hermes_configure(
             "stage": "configure",
             "base_url": _agent_config["base_url"],
             "model": _agent_config["model"],
+            "context_length": _agent_config["context_length"],
             "has_api_key": bool(api_key.strip()),
             "enable_soul": _agent_config["enable_soul"],
             "enable_context": _agent_config["enable_context"],
@@ -893,6 +1093,23 @@ def hermes_new_session():
 def _get_agent():
     global _agent, _conversation_history, _conversation_session_id
 
+    started = time.monotonic()
+
+    def emit_agent_step(label):
+        try:
+            _emit_stream(
+                "timing",
+                json.dumps(
+                    {
+                        "label": label,
+                        "elapsed_ms": round((time.monotonic() - started) * 1000, 1),
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+        except Exception:
+            pass
+
     if not _hermes_source_path:
         raise RuntimeError("Hermes source path has not been prepared.")
 
@@ -900,18 +1117,41 @@ def _get_agent():
         sys.path.insert(0, _hermes_source_path)
 
     if _agent is None:
+        emit_agent_step("agentkit_get_agent_start")
         _install_ios_terminal_bridge()
+        emit_agent_step("agentkit_terminal_bridge_installed")
+        _ensure_agentkit_model_config()
+        emit_agent_step("agentkit_model_config_ready")
+        importlib.import_module("model_tools")
+        emit_agent_step("agentkit_model_tools_imported")
+        if "tools.browser_tool" not in sys.modules:
+            browser_stub = types.ModuleType("tools.browser_tool")
+            browser_stub.cleanup_browser = lambda *args, **kwargs: None
+            sys.modules["tools.browser_tool"] = browser_stub
+            emit_agent_step("agentkit_browser_tool_stubbed")
+        emit_agent_step("agentkit_run_agent_import_start")
         run_agent = importlib.import_module("run_agent")
+        emit_agent_step("agentkit_run_agent_import_done")
+        emit_agent_step("agentkit_run_agent_imported")
         _configure_local_mlx_client(run_agent)
+        emit_agent_step("agentkit_local_client_configured")
         agent_class = getattr(run_agent, "AIAgent")
+        emit_agent_step("agentkit_agent_class_ready")
+        if _is_local_model_base_url(_agent_config["base_url"]):
+            _patch_local_agent_runtime(run_agent, agent_class)
+            emit_agent_step("agentkit_local_runtime_patched")
         session_id = _load_or_create_session_id()
+        emit_agent_step("agentkit_session_id_ready")
         session_db = _get_session_db()
+        emit_agent_step("agentkit_session_db_ready")
         if _conversation_session_id != session_id:
             _conversation_history = _load_conversation_history(session_id)
             _conversation_session_id = session_id
+            emit_agent_step("agentkit_history_loaded")
         enabled_toolsets = ["safe", "terminal", "file"]
         if _agent_config["enable_memory"]:
             enabled_toolsets.append("memory")
+        emit_agent_step("agentkit_constructing_agent")
         _agent = agent_class(
             base_url=_agent_config["base_url"],
             api_key=_agent_config["api_key"],
@@ -925,6 +1165,7 @@ def _get_agent():
             session_id=session_id,
             session_db=session_db,
         )
+        emit_agent_step("agentkit_agent_constructed")
     return _agent
 
 
