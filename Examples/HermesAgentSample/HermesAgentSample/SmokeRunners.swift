@@ -1,6 +1,6 @@
-import AgentKit
-import AgentKitFoundationModels
-import AgentKitMLX
+import SwiftAgent
+import SwiftAgentFoundationModels
+import SwiftAgentMLX
 import Foundation
 
 enum SampleSmokeRunners {
@@ -14,7 +14,7 @@ enum SampleSmokeRunners {
         await FoundationModelsProviderSmokeRunner.runIfRequested()
         await HermesFoundationModelsSmokeRunner.runIfRequested()
         await HermesFoundationModelsToolSmokeRunner.runIfRequested()
-        await AgentKitISHSmokeRunner.runIfRequested()
+        await SwiftAgentISHSmokeRunner.runIfRequested()
         await HermesExtensionProbeSmokeRunner.runIfRequested()
     }
 }
@@ -35,7 +35,7 @@ private enum FoundationModelsProviderSmokeRunner {
             }
 
             let request: [String: Any] = [
-                "model": AgentKitFoundationModels.modelIdentifier,
+                "model": SwiftAgentFoundationModels.modelIdentifier,
                 "messages": [
                     [
                         "role": "user",
@@ -49,9 +49,9 @@ private enum FoundationModelsProviderSmokeRunner {
             ]
             let data = try JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])
             let rawJSON = String(decoding: data, as: UTF8.self)
-            let provider = AgentKitFoundationModelsProvider()
+            let provider = SwiftAgentFoundationModelsProvider()
             let result = try await provider.complete(
-                request: AgentKitModelRequest(rawJSON: rawJSON)
+                request: SwiftAgentModelRequest(rawJSON: rawJSON)
             ) { event in
                 Task {
                     await recorder.write("event kind=\(event.kind) payload=\(event.payload)")
@@ -68,7 +68,7 @@ private enum FoundationModelsProviderSmokeRunner {
 
 private enum LocalMLXSmokeRunner {
     private static let argument = "--local-mlx-smoke"
-    private static let modelID = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit
+    private static let modelID = SwiftAgentLocalMLXModels.qwen35_2BOptiQ4Bit
     private static let prompt = "In one short sentence, say that local MLX inference is working on iPhone."
 
     static func runIfRequested() async {
@@ -78,7 +78,7 @@ private enum LocalMLXSmokeRunner {
         await recorder.write("start model=\(modelID)")
 
         do {
-            let result = try await AgentKitMLXModelProvider().chat(
+            let result = try await SwiftAgentMLXModelProvider().chat(
                 message: prompt,
                 configuration: .init(modelID: modelID, maxTokens: 48, temperature: 0.1)
             ) { event in
@@ -98,7 +98,7 @@ private enum LocalMLXSmokeRunner {
 
 private enum HermesLocalMLXSmokeRunner {
     private static let argument = "--hermes-local-mlx-smoke"
-    private static let modelID = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit
+    private static let modelID = SwiftAgentLocalMLXModels.qwen35_2BOptiQ4Bit
     private static let prompt = "In one short sentence, say whether Hermes is running through a local MLX model."
 
     static func runIfRequested() async {
@@ -151,7 +151,7 @@ private enum HermesNewSessionSmokeRunner {
 
 private enum HermesMLXSessionCycleSmokeRunner {
     private static let argument = "--hermes-mlx-session-cycle-smoke"
-    private static let modelID = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit
+    private static let modelID = SwiftAgentLocalMLXModels.qwen35_2BOptiQ4Bit
 
     static func runIfRequested() async {
         guard ProcessInfo.processInfo.arguments.contains(argument) else { return }
@@ -196,7 +196,7 @@ private enum HermesMLXSessionCycleSmokeRunner {
 
 private enum HermesMLXStressSmokeRunner {
     private static let argument = "--hermes-mlx-stress-smoke"
-    private static let modelID = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit
+    private static let modelID = SwiftAgentLocalMLXModels.qwen35_2BOptiQ4Bit
 
     static func runIfRequested() async {
         guard ProcessInfo.processInfo.arguments.contains(argument) else { return }
@@ -250,7 +250,7 @@ private enum HermesMLXStressSmokeRunner {
 
 private enum HermesMLXToolSmokeRunner {
     private static let argument = "--hermes-mlx-tool-smoke"
-    private static let modelID = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit
+    private static let modelID = SwiftAgentLocalMLXModels.qwen35_2BOptiQ4Bit
 
     static func runIfRequested() async {
         guard ProcessInfo.processInfo.arguments.contains(argument) else { return }
@@ -284,7 +284,7 @@ private enum HermesMLXToolSmokeRunner {
     }
 }
 
-private enum AgentKitISHSmokeRunner {
+private enum SwiftAgentISHSmokeRunner {
     private static let argument = "--hermes-ish-smoke"
 
     static func runIfRequested() async {
@@ -299,7 +299,7 @@ private enum AgentKitISHSmokeRunner {
             try? FileManager.default.removeItem(at: workspace)
             try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
 
-            let shell = AgentKitISHShellEnvironment()
+            let shell = SwiftAgentISHShellEnvironment()
             let first = try shell.run(
                 "echo launch-ish-ok > launch.txt && cat launch.txt",
                 cwd: workspace
@@ -411,7 +411,7 @@ private enum HermesExtensionProbeSmokeRunner {
             let agent = try HermesAgent(
                 configuration: .openAI(apiKey: "probe-key", model: "probe-model"),
                 sourceURL: HermesAgent.bundledSourceURL(),
-                backend: HermesExtensionProcessBackend(appExtensionPoint: .agentKitHermesWorker)
+                backend: HermesExtensionProcessBackend(appExtensionPoint: .swiftAgentWorker)
             )
             let result = try agent.probe()
             await recorder.write("python \(result.python)")
@@ -457,6 +457,6 @@ private actor SmokeRecorder {
                 try? data.write(to: url, options: [.atomic])
             }
         }
-        NSLog("AgentKit smoke: %@", line)
+        NSLog("SwiftAgent smoke: %@", line)
     }
 }

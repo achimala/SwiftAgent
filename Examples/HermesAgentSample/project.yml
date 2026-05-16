@@ -7,16 +7,16 @@ configFiles:
   Debug: Signing.xcconfig
   Release: Signing.xcconfig
 packages:
-  AgentKit:
+  SwiftAgent:
     path: ../..
-  AgentKitMLX:
-    path: ../../Packages/AgentKitMLX
-  AgentKitFoundationModels:
-    path: ../../Packages/AgentKitFoundationModels
+  SwiftAgentMLX:
+    path: ../../Packages/SwiftAgentMLX
+  SwiftAgentFoundationModels:
+    path: ../../Packages/SwiftAgentFoundationModels
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    DEVELOPMENT_TEAM: "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)"
+    DEVELOPMENT_TEAM: "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)"
 targets:
   HermesAgentSample:
     type: application
@@ -29,18 +29,18 @@ targets:
     resources:
       - path: HermesAgentSample/commandDictionary.plist
     dependencies:
-      - package: AgentKit
-        product: AgentKit
-      - package: AgentKitMLX
-        product: AgentKitMLX
-      - package: AgentKitFoundationModels
-        product: AgentKitFoundationModels
+      - package: SwiftAgent
+        product: SwiftAgent
+      - package: SwiftAgentMLX
+        product: SwiftAgentMLX
+      - package: SwiftAgentFoundationModels
+        product: SwiftAgentFoundationModels
       - target: HermesAgentWorker
         embed: true
     info:
       path: HermesAgentSample/Info.plist
       properties:
-        CFBundleDisplayName: Hermes Agent
+        CFBundleDisplayName: SwiftAgent
         CFBundleShortVersionString: "0.1"
         CFBundleVersion: "1"
         UILaunchScreen:
@@ -49,8 +49,8 @@ targets:
           UIApplicationSupportsMultipleScenes: false
     settings:
       base:
-        DEVELOPMENT_TEAM: "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)"
-        PRODUCT_BUNDLE_IDENTIFIER: "$(AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample"
+        DEVELOPMENT_TEAM: "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)"
+        PRODUCT_BUNDLE_IDENTIFIER: "$(SWIFTAGENT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample"
         ENABLE_TESTABILITY: YES
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         EX_ENABLE_EXTENSION_POINT_GENERATION: YES
@@ -59,7 +59,7 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -euo pipefail
-          "$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh"
+          "$PROJECT_DIR/../../Scripts/swiftagent-install-hermes.sh"
   HermesAgentWorker:
     type: extensionkit-extension
     platform: iOS
@@ -69,18 +69,20 @@ targets:
     sources:
       - path: HermesAgentWorker
     dependencies:
-      - package: AgentKit
-        product: AgentKit
-      - package: AgentKitMLX
-        product: AgentKitMLX
+      - package: SwiftAgent
+        product: SwiftAgent
+      - package: SwiftAgentMLX
+        product: SwiftAgentMLX
     info:
       path: HermesAgentWorker/Info.plist
       properties:
-        CFBundleDisplayName: Hermes Worker
+        CFBundleDisplayName: SwiftAgent Worker
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "1"
     settings:
       base:
-        DEVELOPMENT_TEAM: "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)"
-        PRODUCT_BUNDLE_IDENTIFIER: "$(AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample.HermesAgentWorker"
+        DEVELOPMENT_TEAM: "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)"
+        PRODUCT_BUNDLE_IDENTIFIER: "$(SWIFTAGENT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample.HermesAgentWorker"
         IPHONEOS_DEPLOYMENT_TARGET: "26.0"
         ENABLE_USER_SCRIPT_SANDBOXING: NO
     postCompileScripts:
@@ -88,4 +90,4 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -euo pipefail
-          "$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh"
+          "$PROJECT_DIR/../../Scripts/swiftagent-install-hermes.sh"

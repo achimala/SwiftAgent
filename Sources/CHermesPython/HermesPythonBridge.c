@@ -409,7 +409,7 @@ int python3_main(int argc, char **argv) {
             status = run_python_with_capture(run_python_file_context, &context);
         }
     } else {
-        fprintf(command_stderr(), "python3: interactive mode is not available in AgentKit\n");
+        fprintf(command_stderr(), "python3: interactive mode is not available in SwiftAgent\n");
         status = 1;
     }
 
@@ -498,7 +498,7 @@ static int append_path(PyConfig *config, const char *path, char *error, int erro
     return 0;
 }
 
-static PyObject *agentkit_emit_stream(PyObject *self, PyObject *args) {
+static PyObject *swiftagent_emit_stream(PyObject *self, PyObject *args) {
     const char *event = NULL;
     const char *payload = NULL;
 
@@ -513,7 +513,7 @@ static PyObject *agentkit_emit_stream(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
-static PyObject *agentkit_run_shell(PyObject *self, PyObject *args) {
+static PyObject *swiftagent_run_shell(PyObject *self, PyObject *args) {
     const char *command = NULL;
     const char *cwd = NULL;
     int timeout = 60;
@@ -568,7 +568,7 @@ static PyObject *agentkit_run_shell(PyObject *self, PyObject *args) {
     return result;
 }
 
-static PyObject *agentkit_local_llm_chat(PyObject *self, PyObject *args) {
+static PyObject *swiftagent_local_llm_chat(PyObject *self, PyObject *args) {
     const char *request_json = NULL;
 
     if (!PyArg_ParseTuple(args, "s", &request_json)) {
@@ -594,30 +594,30 @@ static PyObject *agentkit_local_llm_chat(PyObject *self, PyObject *args) {
     return result;
 }
 
-static PyMethodDef AgentKitMethods[] = {
-    {"emit_stream", agentkit_emit_stream, METH_VARARGS, "Emit a Hermes stream event to the native host."},
-    {"run_shell", agentkit_run_shell, METH_VARARGS, "Run a shell command through the native host."},
-    {"local_llm_chat", agentkit_local_llm_chat, METH_VARARGS, "Run a local LLM chat completion through the native host."},
+static PyMethodDef SwiftAgentMethods[] = {
+    {"emit_stream", swiftagent_emit_stream, METH_VARARGS, "Emit a Hermes stream event to the native host."},
+    {"run_shell", swiftagent_run_shell, METH_VARARGS, "Run a shell command through the native host."},
+    {"local_llm_chat", swiftagent_local_llm_chat, METH_VARARGS, "Run a local LLM chat completion through the native host."},
     {NULL, NULL, 0, NULL}
 };
 
-static struct PyModuleDef AgentKitModule = {
+static struct PyModuleDef SwiftAgentModule = {
     PyModuleDef_HEAD_INIT,
-    "_hermes_agentkit",
-    "Native callbacks for AgentKit.",
+    "_hermes_swiftagent",
+    "Native callbacks for SwiftAgent.",
     -1,
-    AgentKitMethods
+    SwiftAgentMethods
 };
 
-static int install_agentkit_module(char *error, int error_capacity) {
-    PyObject *module = PyModule_Create(&AgentKitModule);
+static int install_swiftagent_module(char *error, int error_capacity) {
+    PyObject *module = PyModule_Create(&SwiftAgentModule);
     if (module == NULL) {
         set_python_error(error, error_capacity);
         return -1;
     }
 
     PyObject *modules = PyImport_GetModuleDict();
-    if (PyDict_SetItemString(modules, "_hermes_agentkit", module) != 0) {
+    if (PyDict_SetItemString(modules, "_hermes_swiftagent", module) != 0) {
         Py_DECREF(module);
         set_python_error(error, error_capacity);
         return -1;
@@ -662,7 +662,7 @@ static char *call_bootstrap_function(
         return NULL;
     }
 
-    PyObject *module = PyImport_ImportModule("agentkit_bootstrap");
+    PyObject *module = PyImport_ImportModule("swiftagent_bootstrap");
     if (module == NULL) {
         Py_XDECREF(args);
         set_python_error(error, error_capacity);
@@ -748,7 +748,7 @@ int HermesPython_Initialize(const char *python_home, const char *python_paths, c
         return -1;
     }
 
-    if (install_agentkit_module(error, error_capacity) != 0) {
+    if (install_swiftagent_module(error, error_capacity) != 0) {
         return -1;
     }
 

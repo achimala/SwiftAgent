@@ -1,4 +1,4 @@
-import AgentKit
+import SwiftAgent
 import Foundation
 
 enum ChatTranscriptFormatter {

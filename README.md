@@ -1,12 +1,12 @@
-# AgentKit
+# SwiftAgent
 
-AgentKit is a Swift package for embedding an AI agent inside an iOS app.
+SwiftAgent is a Swift package for embedding an AI agent inside an iOS app.
 
 The current implementation ships Hermes as the first supported agent runtime. It embeds CPython, bundles Hermes and its Python dependencies, streams agent events back to SwiftUI, and gives the agent a useful iOS-safe workspace with file tools and an embedded iSH shell.
 
-On iOS 26+, AgentKit can run the agent out of process in an ExtensionKit worker, so Hermes, Python, iSH, and native Python dependencies are isolated from the host app process.
+On iOS 26+, SwiftAgent can run the agent out of process in an ExtensionKit worker, so Hermes, Python, iSH, and native Python dependencies are isolated from the host app process.
 
-![Hermes running in the AgentKit sample app](docs/assets/hermes-agent-sample.png)
+<img src="docs/assets/swiftagent-sample.png" alt="Hermes running in the SwiftAgent sample app" width="420">
 
 ## What You Get
 
@@ -22,34 +22,38 @@ On iOS 26+, AgentKit can run the agent out of process in an ExtensionKit worker,
 
 For implementation details, package layout, limitations, and rebuild notes, see [Technical Details](docs/TECHNICAL_DETAILS.md).
 
+## License
+
+SwiftAgent is licensed under GPLv3. The embedded iSH dependency is GPLv3, so SwiftAgent follows the same license. Hermes Agent is MIT-licensed and remains attributed to its upstream project.
+
 ## Install
 
-Add AgentKit with Swift Package Manager:
+Add SwiftAgent with Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/achimala/AgentKit", branch: "main")
+.package(url: "https://github.com/achimala/SwiftAgent", branch: "main")
 ```
 
-Then add the `AgentKit` product to your app target.
+Then add the `SwiftAgent` product to your app target.
 
-AgentKit uses binary XCFrameworks internally for Python, iSH, and shell support, but SPM is the easiest public integration shape because it can carry Swift sources, resources, binary targets, templates, tests, and scripts together.
+SwiftAgent uses binary XCFrameworks internally for Python, iSH, and shell support, but SPM is the easiest public integration shape because it can carry Swift sources, resources, binary targets, templates, tests, and scripts together.
 
 ## Embed Hermes
 
-AgentKit expects the app bundle to include a Python payload at `PythonApp/hermes` by default. The package includes a pinned Hermes source lock, checked-in Python dependency layers, and a build script that fetches the pinned Hermes release if needed, stages platform-specific Python packages, installs the Python stdlib, and converts native Python extension modules into signed app frameworks.
+SwiftAgent expects the app bundle to include a Python payload at `PythonApp/hermes` by default. The package includes a pinned Hermes source lock, checked-in Python dependency layers, and a build script that fetches the pinned Hermes release if needed, stages platform-specific Python packages, installs the Python stdlib, and converts native Python extension modules into signed app frameworks.
 
 Add this Run Script build phase to your app target:
 
 ```bash
 set -euo pipefail
-"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/AgentKit/Scripts/agentkit-install-hermes.sh"
+"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/SwiftAgent/Scripts/swiftagent-install-hermes.sh"
 ```
 
 For local development against this repo, the sample app uses:
 
 ```bash
 set -euo pipefail
-"$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh"
+"$PROJECT_DIR/../../Scripts/swiftagent-install-hermes.sh"
 ```
 
 Fresh checkouts fetch the pinned Hermes source on the first build. To prefetch explicitly, or to refresh after editing `Vendor/hermes-agent.lock`, run:
@@ -58,7 +62,7 @@ Fresh checkouts fetch the pinned Hermes source on the first build. To prefetch e
 ./Scripts/update-hermes.sh
 ```
 
-Set `AGENTKIT_AUTO_FETCH_HERMES=NO` in the build phase environment if CI should fail instead of fetching when the local Hermes payload is missing.
+Set `SWIFTAGENT_AUTO_FETCH_HERMES=NO` in the build phase environment if CI should fail instead of fetching when the local Hermes payload is missing.
 
 ## Recommended: Add The Worker Extension
 
@@ -66,20 +70,20 @@ For iOS 26+, add an ExtensionKit worker so the agent runs outside your app proce
 
 1. Add an ExtensionKit extension target to your app.
 
-2. Link the `AgentKit` package product from both the app target and the extension target.
+2. Link the `SwiftAgent` package product from both the app target and the extension target.
 
 3. Create the worker boilerplate:
 
    ```bash
-   ./Scripts/agentkit-scaffold-worker-extension.sh \
+   ./Scripts/swiftagent-scaffold-worker-extension.sh \
      --host-bundle-id com.example.MyApp \
-     --output-dir AgentKitAgentWorker
+     --output-dir SwiftAgentWorker
    ```
 
 4. Add the generated files to targets:
 
-   - `AgentKitAgentWorker.swift` and `Info.plist` go in the extension target.
-   - `AgentKitWorkerExtensionPoint.swift` goes in the host app target.
+   - `SwiftAgentWorker.swift` and `Info.plist` go in the extension target.
+   - `SwiftAgentWorkerExtensionPoint.swift` goes in the host app target.
 
 5. In the extension target build settings, enable:
 
@@ -87,7 +91,7 @@ For iOS 26+, add an ExtensionKit worker so the agent runs outside your app proce
    EX_ENABLE_EXTENSION_POINT_GENERATION = YES
    ```
 
-6. Add the same `agentkit-install-hermes.sh` Run Script phase to the extension target.
+6. Add the same `swiftagent-install-hermes.sh` Run Script phase to the extension target.
 
 7. Make sure the host app embeds the extension target in `Embed ExtensionKit Extensions`.
 
@@ -96,7 +100,7 @@ That app-owned extension target is required by iOS. SPM can provide the code, re
 ## Use It
 
 ```swift
-import AgentKit
+import SwiftAgent
 
 let configuration = HermesAgentConfiguration.openAI(
     apiKey: apiKey,
@@ -108,7 +112,7 @@ if #available(iOS 26.0, *) {
     agent = try HermesAgent(
         configuration: configuration,
         sourceURL: HermesAgent.bundledSourceURL(),
-        backend: HermesExtensionProcessBackend(appExtensionPoint: .agentKitAgentWorker)
+        backend: HermesExtensionProcessBackend(appExtensionPoint: .swiftAgentWorker)
     )
 } else {
     agent = try HermesAgent(configuration: configuration)
@@ -127,35 +131,35 @@ let newSession = try agent.newSession()
 let restored = try agent.loadSession(sessionID)
 ```
 
-For offline MLX experiments, add the local `Packages/AgentKitMLX` add-on package and link its `AgentKitMLX` product. This keeps the default `AgentKit` package from resolving or building MLX dependencies unless an app opts into local models.
+For offline MLX experiments, add the local `Packages/SwiftAgentMLX` add-on package and link its `SwiftAgentMLX` product. This keeps the default `SwiftAgent` package from resolving or building MLX dependencies unless an app opts into local models.
 
 ```swift
-import AgentKit
-import AgentKitMLX
+import SwiftAgent
+import SwiftAgentMLX
 
 let agent = try HermesAgent(
     configuration: .localMLX(
-        model: AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit,
+        model: SwiftAgentLocalMLXModels.qwen35_2BOptiQ4Bit,
         maxTokens: 128,
         temperature: 0.2
     ),
     sourceURL: HermesAgent.bundledSourceURL(),
     executionMode: .inProcess,
-    modelProvider: AgentKitMLXModelProvider()
+    modelProvider: SwiftAgentMLXModelProvider()
 )
 ```
 
-For Apple Foundation Models experiments on iOS 26+, add the local `Packages/AgentKitFoundationModels` add-on package and link its `AgentKitFoundationModels` product:
+For Apple Foundation Models experiments on iOS 26+, add the local `Packages/SwiftAgentFoundationModels` add-on package and link its `SwiftAgentFoundationModels` product:
 
 ```swift
-import AgentKit
-import AgentKitFoundationModels
+import SwiftAgent
+import SwiftAgentFoundationModels
 
 let agent = try HermesAgent(
     configuration: .foundationModels(maxTokens: 160, temperature: 0.1),
     sourceURL: HermesAgent.bundledSourceURL(),
     executionMode: .inProcess,
-    modelProvider: AgentKitFoundationModelsProvider()
+    modelProvider: SwiftAgentFoundationModelsProvider()
 )
 ```
 
@@ -181,7 +185,7 @@ cp Examples/HermesAgentSample/Local.xcconfig.example \
   Examples/HermesAgentSample/Local.xcconfig
 ```
 
-Then edit `Examples/HermesAgentSample/Local.xcconfig` with your Apple development team ID. Keep `AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX = com.daysail` for the checked-in sample app: the sample ExtensionKit worker is statically bound to `com.daysail.HermesAgentSample`. That file is ignored by git, so your personal signing identity does not get committed.
+Then edit `Examples/HermesAgentSample/Local.xcconfig` with your Apple development team ID. Keep `SWIFTAGENT_SAMPLE_BUNDLE_ID_PREFIX = com.daysail` for the checked-in sample app: the sample ExtensionKit worker is statically bound to `com.daysail.HermesAgentSample`. That file is ignored by git, so your personal signing identity does not get committed.
 
 For your own app, use your own bundle ID and generate/update the worker entrypoint so its `AppExtensionPoint.Identifier(host:name:)` host string exactly matches your app bundle ID. ExtensionKit requires that host string to be a compile-time static string.
 
@@ -194,9 +198,9 @@ Verified in simulator and generic iOS builds:
 - Hermes initializes inside the iOS app bundle.
 - The ExtensionKit backend runs Hermes out of process on iOS 26+.
 - Terminal calls run through a persistent iSH ARM64 Alpine shell.
-- File read/write tools work in the AgentKit workspace.
+- File read/write tools work in the SwiftAgent workspace.
 - Hermes memory, context, and soul can persist under Application Support.
 - The optional local MLX add-on runs as an offline proof of concept, though the small 2B model is weak at tool use.
 - The optional Apple Foundation Models add-on can run Hermes chat and basic file-tool loops on device, but still needs a more curated agent/tool layer.
 
-AgentKit is still a proof of concept. Hermes is the only supported agent implementation today, and some desktop-style tools are intentionally unavailable on iOS.
+SwiftAgent is still a proof of concept. Hermes is the only supported agent implementation today, and some desktop-style tools are intentionally unavailable on iOS.

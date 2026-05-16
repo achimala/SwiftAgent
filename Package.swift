@@ -3,19 +3,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "AgentKit",
+    name: "SwiftAgent",
     platforms: [
         .iOS(.v17),
         .macOS(.v14),
     ],
     products: [
         .library(
-            name: "AgentKitCore",
-            targets: ["AgentKitCore"]
+            name: "SwiftAgentCore",
+            targets: ["SwiftAgentCore"]
         ),
         .library(
-            name: "AgentKit",
-            targets: ["AgentKit"]
+            name: "SwiftAgent",
+            targets: ["SwiftAgent"]
         ),
     ],
     dependencies: [],
@@ -25,8 +25,8 @@ let package = Package(
             path: "Vendor/Python.xcframework"
         ),
         .binaryTarget(
-            name: "AgentKitISH",
-            path: "Vendor/AgentKitISH.xcframework"
+            name: "SwiftAgentISH",
+            path: "Vendor/SwiftAgentISH.xcframework"
         ),
         .binaryTarget(
             name: "ios_system",
@@ -59,7 +59,7 @@ let package = Package(
             checksum: "9a30ac6b3780dd68d2268d10467902214e32333e980c59090faa6099f0d250fc"
         ),
         .target(
-            name: "AgentKitCore"
+            name: "SwiftAgentCore"
         ),
         .target(
             name: "CHermesPython",
@@ -76,12 +76,12 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         .target(
-            name: "AgentKit",
+            name: "SwiftAgent",
             dependencies: [
-                "AgentKitCore",
+                "SwiftAgentCore",
                 "CHermesPython",
                 .target(name: "CHermesShell", condition: .when(platforms: [.iOS])),
-                .target(name: "AgentKitISH", condition: .when(platforms: [.iOS])),
+                .target(name: "SwiftAgentISH", condition: .when(platforms: [.iOS])),
                 .target(name: "awk", condition: .when(platforms: [.iOS])),
                 .target(name: "dash", condition: .when(platforms: [.iOS])),
                 .target(name: "files", condition: .when(platforms: [.iOS])),
@@ -99,8 +99,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "AgentKitCoreTests",
-            dependencies: ["AgentKitCore"]
+            name: "SwiftAgentCoreTests",
+            dependencies: ["SwiftAgentCore"]
         ),
     ]
 )

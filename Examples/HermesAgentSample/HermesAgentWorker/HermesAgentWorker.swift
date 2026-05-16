@@ -1,5 +1,5 @@
-import AgentKit
-import AgentKitMLX
+import SwiftAgent
+import SwiftAgentMLX
 import ExtensionFoundation
 import Foundation
 
@@ -7,17 +7,17 @@ import Foundation
 struct HermesAgentWorker: AppExtension {
     var configuration: some AppExtensionConfiguration {
         ConnectionHandler(onConnection: { connection in
-            connection.exportedInterface = AgentKitHermesXPC.serviceInterface()
-            connection.exportedObject = AgentKitHermesXPCService(
+            connection.exportedInterface = SwiftAgentHermesXPC.serviceInterface()
+            connection.exportedObject = SwiftAgentHermesXPCService(
                 modelProviderResolver: { configuration in
                     if configuration.baseURL.hasPrefix("hermes-local-mlx://") {
-                        return AgentKitMLXModelProvider()
+                        return SwiftAgentMLXModelProvider()
                     }
 
                     return nil
                 }
             )
-            connection.remoteObjectInterface = AgentKitHermesXPC.eventSinkInterface()
+            connection.remoteObjectInterface = SwiftAgentHermesXPC.eventSinkInterface()
             connection.resume()
             return true
         })
@@ -25,6 +25,6 @@ struct HermesAgentWorker: AppExtension {
 
     @AppExtensionPoint.Bind
     var boundExtensionPoint: AppExtensionPoint {
-        AppExtensionPoint.Identifier(host: "com.daysail.HermesAgentSample", name: "agentkit-hermes-worker")
+        AppExtensionPoint.Identifier(host: "com.daysail.HermesAgentSample", name: "swiftagent-hermes-worker")
     }
 }

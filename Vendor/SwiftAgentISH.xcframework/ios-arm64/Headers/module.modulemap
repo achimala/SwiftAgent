@@ -1,0 +1,4 @@
+module SwiftAgentISH {
+  umbrella header "SwiftAgentISH.h"
+  export *
+}

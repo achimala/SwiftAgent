@@ -3,5 +3,5 @@
 // The sample worker extension is statically bound to com.daysail.HermesAgentSample.
 // Keep this prefix unless you also update HermesAgentWorker.swift's AppExtensionPoint host.
 
-AGENTKIT_SAMPLE_DEVELOPMENT_TEAM = YOURTEAMID
-AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX = com.daysail
+SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM = YOURTEAMID
+SWIFTAGENT_SAMPLE_BUNDLE_ID_PREFIX = com.daysail

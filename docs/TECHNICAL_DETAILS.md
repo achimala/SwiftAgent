@@ -1,81 +1,85 @@
-# AgentKit Technical Details
+# SwiftAgent Technical Details
 
-This document collects the lower-level architecture, packaging, and boundary notes for AgentKit. The README stays focused on app adoption.
+This document collects the lower-level architecture, packaging, and boundary notes for SwiftAgent. The README stays focused on app adoption.
 
 ## Package Contents
 
 - `Vendor/Python.xcframework`: BeeWare Python 3.14 for iOS.
-- `Vendor/AgentKitISH.xcframework`: a local iSH ARM64 static XCFramework for the embedded Linux-like shell backend.
-- `Vendor/ish-arm64`: vendored GPLv3 iSH ARM64 source plus AgentKit embedding patches.
+- `Vendor/SwiftAgentISH.xcframework`: a local iSH ARM64 static XCFramework for the embedded Linux-like shell backend.
+- `Vendor/ish-arm64`: vendored GPLv3 iSH ARM64 source plus SwiftAgent embedding patches.
 - `Vendor/hermes-agent.lock`: the reviewed upstream Hermes release pin.
 - `Payloads/Hermes/PythonApp`: checked-in Python dependency layers plus a generated `hermes/` source directory fetched from the lock file.
 - `Sources/CHermesPython`: a C bridge around `PyConfig`, Python evaluation, and Hermes callback plumbing.
-- `Sources/AgentKitCore`: the lightweight protocol/path layer and test doubles.
-- `Sources/AgentKit`: the batteries-included iOS POC target that re-exports `AgentKitCore` and includes Hermes, iSH shell, and iOS shell support.
-- `Packages/AgentKitMLX`: an optional local-model add-on package that carries the MLX/Hugging Face dependencies and `AgentKitMLXModelProvider`.
-- `Packages/AgentKitFoundationModels`: an optional iOS 26+ add-on package that carries `AgentKitFoundationModelsProvider` for Apple Foundation Models.
-- `Examples/HermesAgentSample`: an iOS app that consumes the canonical AgentKit Hermes payload through the build script.
+- `Sources/SwiftAgentCore`: the lightweight protocol/path layer and test doubles.
+- `Sources/SwiftAgent`: the batteries-included iOS POC target that re-exports `SwiftAgentCore` and includes Hermes, iSH shell, and iOS shell support.
+- `Packages/SwiftAgentMLX`: an optional local-model add-on package that carries the MLX/Hugging Face dependencies and `SwiftAgentMLXModelProvider`.
+- `Packages/SwiftAgentFoundationModels`: an optional iOS 26+ add-on package that carries `SwiftAgentFoundationModelsProvider` for Apple Foundation Models.
+- `Examples/HermesAgentSample`: an iOS app that consumes the canonical SwiftAgent Hermes payload through the build script.
 - `Scripts/update-hermes.sh`: fetches the pinned upstream Hermes release and stages it into ignored `Payloads/Hermes/PythonApp/hermes`.
 - `Scripts/build-native-wheels.sh`: a reproducible recipe for rebuilding the Rust-backed iOS wheels used by OpenAI/Pydantic.
-- `Scripts/agentkit-scaffold-worker-extension.sh` and `Templates/AgentKitWorkerExtension`: boilerplate for adding the out-of-process AgentKit worker extension to a host app.
+- `Scripts/swiftagent-scaffold-worker-extension.sh` and `Templates/SwiftAgentWorkerExtension`: boilerplate for adding the out-of-process SwiftAgent worker extension to a host app.
+
+## Licensing
+
+SwiftAgent is distributed under GPLv3. This matches the GPLv3 requirements of the embedded iSH dependency. Hermes Agent is MIT-licensed; the SwiftAgent build fetches and packages the pinned Hermes source, but the upstream Hermes license remains MIT.
 
 ## Architecture
 
 The public layering is:
 
-- `AgentKitShellEnvironment`: runs shell commands for an agent. Current implementations are `AgentKitISHShellEnvironment` and the older `AgentKitIOSShellEnvironment`.
-- `AgentKitModelProvider`: completes OpenAI-style model requests. Current implementations are the optional `AgentKitMLXModelProvider` and `AgentKitFoundationModelsProvider` add-ons plus `AgentKitMockModelProvider`.
+- `SwiftAgentShellEnvironment`: runs shell commands for an agent. Current implementations are `SwiftAgentISHShellEnvironment` and the older `SwiftAgentIOSShellEnvironment`.
+- `SwiftAgentModelProvider`: completes OpenAI-style model requests. Current implementations are the optional `SwiftAgentMLXModelProvider` and `SwiftAgentFoundationModelsProvider` add-ons plus `SwiftAgentMockModelProvider`.
 - `HermesAgentBackend`: owns the execution boundary for a Hermes agent. `HermesInProcessBackend` runs in the host app; `HermesExtensionProcessBackend` launches an ExtensionKit worker over XPC on iOS 26+.
-- `HermesAgentRuntime`: the Hermes-specific adapter that embeds CPython, loads Hermes, and routes Hermes callbacks into the configured AgentKit shell/model providers.
-- `AgentKitMockShellEnvironment` and `AgentKitMockModelProvider`: test doubles for exercising the Hermes bridge without a full app or real model.
+- `HermesAgentRuntime`: the Hermes-specific adapter that embeds CPython, loads Hermes, and routes Hermes callbacks into the configured SwiftAgent shell/model providers.
+- `SwiftAgentMockShellEnvironment` and `SwiftAgentMockModelProvider`: test doubles for exercising the Hermes bridge without a full app or real model.
 
-This gives us a clean path for future agent implementations: they should target the AgentKit protocols, while Hermes-specific Python and bootstrap code stays behind `HermesAgentRuntime`.
+This gives us a clean path for future agent implementations: they should target the SwiftAgent protocols, while Hermes-specific Python and bootstrap code stays behind `HermesAgentRuntime`.
 
-AgentKit does not expose package-level singleton instances. Each `HermesAgent` gets its own runtime facade and provider objects by default, and callers can inject custom shell/model implementations for tests or app-specific behavior. The embedded CPython interpreter is still process-global, so native Python calls are serialized internally; independent agent objects are supported, but true simultaneous Hermes execution needs deeper interpreter/session isolation.
+SwiftAgent does not expose package-level singleton instances. Each `HermesAgent` gets its own runtime facade and provider objects by default, and callers can inject custom shell/model implementations for tests or app-specific behavior. The embedded CPython interpreter is still process-global, so native Python calls are serialized internally; independent agent objects are supported, but true simultaneous Hermes execution needs deeper interpreter/session isolation.
 
-The default isolation layer for supported apps is out-of-process execution. On iOS, the viable direction is an app extension process launched with ExtensionFoundation and contacted over XPC, not `fork`/`exec` child processes. AgentKit includes the backend, XPC service, sample app extension, and scaffold templates for that path. The current extension smoke proves Python, Hermes, session calls, iSH terminal commands, and file read/write tools inside the worker process.
+The default isolation layer for supported apps is out-of-process execution. On iOS, the viable direction is an app extension process launched with ExtensionFoundation and contacted over XPC, not `fork`/`exec` child processes. SwiftAgent includes the backend, XPC service, sample app extension, and scaffold templates for that path. The current extension smoke proves Python, Hermes, session calls, iSH terminal commands, and file read/write tools inside the worker process.
 
 ## Distribution Shape
 
-Use Swift Package Manager for the public integration. It is the best fit for AgentKit because it can deliver Swift source, binary XCFrameworks, resources, tests, scripts, and templates in one dependency.
+Use Swift Package Manager for the public integration. It is the best fit for SwiftAgent because it can deliver Swift source, binary XCFrameworks, resources, tests, scripts, and templates in one dependency.
 
-AgentKit already uses XCFrameworks internally for the parts that need them:
+SwiftAgent already uses XCFrameworks internally for the parts that need them:
 
 - `Python.xcframework` for BeeWare Python.
-- `AgentKitISH.xcframework` for the vendored iSH native library.
+- `SwiftAgentISH.xcframework` for the vendored iSH native library.
 - `ios_system` auxiliary XCFrameworks.
 
-Shipping AgentKit itself as one giant XCFramework would not remove the hard part: iOS still requires the consuming app to define and embed its own ExtensionKit extension target, and Python still needs a final app-bundle processing phase so native extension modules are copied and signed as frameworks. SPM keeps those moving pieces visible and versioned while still letting app code say `import AgentKit`.
+Shipping SwiftAgent itself as one giant XCFramework would not remove the hard part: iOS still requires the consuming app to define and embed its own ExtensionKit extension target, and Python still needs a final app-bundle processing phase so native extension modules are copied and signed as frameworks. SPM keeps those moving pieces visible and versioned while still letting app code say `import SwiftAgent`.
 
 ## How The Sample Is Wired
 
 The sample app does the same thing a consuming app should do:
 
-- `HermesAgentSample/HermesWorkerExtensionPoint.swift` defines the host app extension point with `@Definition`.
-- `HermesAgentWorker/HermesAgentWorker.swift` is the extension entrypoint. It binds to the host bundle ID and extension point name, then exports `AgentKitHermesXPCService`.
+- `HermesAgentSample/SwiftAgentWorkerExtensionPoint.swift` defines the host app extension point with `@Definition`.
+- `HermesAgentWorker/HermesAgentWorker.swift` is the extension entrypoint. It binds to the host bundle ID and extension point name, then exports `SwiftAgentHermesXPCService`.
 - The Xcode project has a `HermesAgentWorker.appex` target and embeds it into the app.
-- Both the app and extension targets run `Scripts/agentkit-install-hermes.sh`, so both bundles contain the Python runtime and Hermes payload.
-- The host app chooses `HermesExtensionProcessBackend(appExtensionPoint: .agentKitHermesWorker)` on iOS 26+.
+- Both the app and extension targets run `Scripts/swiftagent-install-hermes.sh`, so both bundles contain the Python runtime and Hermes payload.
+- The host app chooses `HermesExtensionProcessBackend(appExtensionPoint: .swiftAgentWorker)` on iOS 26+.
 
 ## Dependency Packaging
 
-AgentKit includes a reusable Xcode build phase helper:
+SwiftAgent includes a reusable Xcode build phase helper:
 
 ```bash
 set -euo pipefail
-"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/AgentKit/Scripts/agentkit-install-hermes.sh"
+"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/SwiftAgent/Scripts/swiftagent-install-hermes.sh"
 ```
 
 For local development against this repo, the sample app uses:
 
 ```bash
 set -euo pipefail
-"$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh"
+"$PROJECT_DIR/../../Scripts/swiftagent-install-hermes.sh"
 ```
 
 The script ensures the pinned Hermes source exists, copies the Hermes Python payload into the final app bundle, overlays the platform-specific Python packages, and runs BeeWare's `install_python` helper to copy the Python standard library and convert `.so` extension modules into signed app frameworks.
 
-By default the script uses `Payloads/Hermes/PythonApp`. If `Payloads/Hermes/PythonApp/hermes` is missing, it runs `Scripts/update-hermes.sh` to fetch the pinned source before copying the payload. Apps can set `AGENTKIT_PYTHON_APP_SOURCE` to their own payload directory and `AGENTKIT_PYTHON_XCFRAMEWORK` to a custom Python framework path. Set `AGENTKIT_AUTO_FETCH_HERMES=NO` to make missing Hermes source a hard build error.
+By default the script uses `Payloads/Hermes/PythonApp`. If `Payloads/Hermes/PythonApp/hermes` is missing, it runs `Scripts/update-hermes.sh` to fetch the pinned source before copying the payload. Apps can set `SWIFTAGENT_PYTHON_APP_SOURCE` to their own payload directory and `SWIFTAGENT_PYTHON_XCFRAMEWORK` to a custom Python framework path. Set `SWIFTAGENT_AUTO_FETCH_HERMES=NO` to make missing Hermes source a hard build error.
 
 Third-party Python packages are staged with this layout:
 
@@ -83,15 +87,15 @@ Third-party Python packages are staged with this layout:
 - `PythonApp/site-packages-iphonesimulator`: simulator-native wheels.
 - `PythonApp/site-packages-iphoneos`: device-native wheels.
 
-SwiftPM cannot silently add this final app-bundle processing step to a consuming iOS app, so a small explicit Run Script phase is still required for the Python/Hermes backend. The app-facing Swift code stays at `import AgentKit`.
+SwiftPM cannot silently add this final app-bundle processing step to a consuming iOS app, so a small explicit Run Script phase is still required for the Python/Hermes backend. The app-facing Swift code stays at `import SwiftAgent`.
 
-Local MLX support lives in the separate `Packages/AgentKitMLX` add-on package. The main `AgentKit` package intentionally has no MLX, Hugging Face, or tokenizer package dependencies, so hosted-model apps do not resolve that graph. Apps that want offline local-model experiments can add the add-on package and inject `AgentKitMLXModelProvider` explicitly.
+Local MLX support lives in the separate `Packages/SwiftAgentMLX` add-on package. The main `SwiftAgent` package intentionally has no MLX, Hugging Face, or tokenizer package dependencies, so hosted-model apps do not resolve that graph. Apps that want offline local-model experiments can add the add-on package and inject `SwiftAgentMLXModelProvider` explicitly.
 
-Apple Foundation Models support lives in the separate `Packages/AgentKitFoundationModels` add-on package. It is weak-linked and guarded behind iOS/macOS/visionOS 26 availability. The provider uses the existing Hermes local-model bridge, presents compact native Foundation Models tool schemas for `read_file`, `write_file`, and `terminal`, and returns OpenAI-style tool calls to Hermes for execution.
+Apple Foundation Models support lives in the separate `Packages/SwiftAgentFoundationModels` add-on package. It is weak-linked and guarded behind iOS/macOS/visionOS 26 availability. The provider uses the existing Hermes local-model bridge, presents compact native Foundation Models tool schemas for `read_file`, `write_file`, and `terminal`, and returns OpenAI-style tool calls to Hermes for execution.
 
 ## Updating Hermes
 
-Hermes is intentionally not a Git submodule and is not checked into this repository. The build phase fetches the pinned release on demand when the generated payload is missing. CI can either pre-run `./Scripts/update-hermes.sh` for an explicit bootstrap step or set `AGENTKIT_AUTO_FETCH_HERMES=NO` to prevent network access during builds.
+Hermes is intentionally not a Git submodule and is not checked into this repository. The build phase fetches the pinned release on demand when the generated payload is missing. CI can either pre-run `./Scripts/update-hermes.sh` for an explicit bootstrap step or set `SWIFTAGENT_AUTO_FETCH_HERMES=NO` to prevent network access during builds.
 
 The source pin lives in `Vendor/hermes-agent.lock`:
 
@@ -121,23 +125,23 @@ That builds simulator and device wheels into `Build/wheelhouse`. Updating the ch
 
 ## iSH Shell Backend
 
-The iSH integration is session-based. A one-shot `ish /bin/sh -c ...` style runner works once, but is not reentrant in a single host process because the iSH kernel keeps global state. AgentKit instead boots one long-lived guest shell, writes commands over a pipe, and reads output until a private completion marker.
+The iSH integration is session-based. A one-shot `ish /bin/sh -c ...` style runner works once, but is not reentrant in a single host process because the iSH kernel keeps global state. SwiftAgent instead boots one long-lived guest shell, writes commands over a pipe, and reads output until a private completion marker.
 
 The current rootfs is copied from the app bundle into Application Support before first use because iSH mutates its fakefs metadata and the `/workspace` bind mount. This is packaging-heavy but keeps the POC honest: it runs real guest binaries rather than a hand-written command parser.
 
-The iSH guest bind-mounts the AgentKit workspace at `/workspace`. Hermes file tools run through a direct iOS host-file bridge constrained to the same workspace, so shell-created files and Python-created files are visible to each other without pretending host absolute paths exist inside the guest.
+The iSH guest bind-mounts the SwiftAgent workspace at `/workspace`. Hermes file tools run through a direct iOS host-file bridge constrained to the same workspace, so shell-created files and Python-created files are visible to each other without pretending host absolute paths exist inside the guest.
 
 ## Current Result
 
 Verified in simulator and generic iOS builds:
 
 - Embedded CPython initializes from the app bundle.
-- The app imports AgentKit bootstrap resources from the Swift package bundle.
+- The app imports SwiftAgent bootstrap resources from the Swift package bundle.
 - The app imports real Hermes `run_agent.py` from bundled source.
 - Hermes chat works with OpenAI-compatible endpoints and streams reasoning, tool calls, tool outputs, timing, and final responses back to Swift.
 - Hermes memory/context/soul are enabled with persistent `HERMES_HOME` under Application Support.
 - Hermes terminal calls route into a persistent iSH ARM64 Alpine shell session.
-- The iSH guest bind-mounts the AgentKit workspace at `/workspace`, so shell-created files are visible to Python/file tooling.
+- The iSH guest bind-mounts the SwiftAgent workspace at `/workspace`, so shell-created files are visible to Python/file tooling.
 - The bundled iSH rootfs includes `python3`, `rg`, `jq`, and `git` for a first useful agent shell POC.
 - A local MLX/Qwen 2B provider can be wired through the optional add-on package and the same model-provider bridge as an offline proof of concept.
 - Apple Foundation Models can be wired through the optional add-on package. On an iPhone 17 Pro Max, direct Hermes chat returned first text in about 5 seconds, and a basic file-tool smoke caused the model to request `write_file`, `read_file`, and `terminal` calls that Hermes executed.
@@ -152,5 +156,5 @@ Verified in simulator and generic iOS builds:
 - The package-level `HermesAgent(configuration:)` convenience initializer still runs in process unless the app explicitly passes `HermesExtensionProcessBackend`. The sample defaults to the extension backend on iOS 26+.
 - The bundled full Alpine fakefs is large; a distributable package should eventually build a smaller purpose-made rootfs.
 - The optional local MLX model provider is a POC. The 2B model can run offline, but it is weak at tool use compared with a hosted model.
-- The optional Foundation Models provider is a POC. It is much faster and more memory-stable than MLX, but Hermes' generic OpenAI-style loop is not an ideal fit for Apple's small context window and native tool design. A first-class AgentKit-native Foundation Models agent is likely cleaner than pushing this through every Hermes feature.
+- The optional Foundation Models provider is a POC. It is much faster and more memory-stable than MLX, but Hermes' generic OpenAI-style loop is not an ideal fit for Apple's small context window and native tool design. A first-class SwiftAgent-native Foundation Models agent is likely cleaner than pushing this through every Hermes feature.
 - Generic `iphoneos` build can be verified with `CODE_SIGNING_ALLOWED=NO`; real device install still needs normal Apple signing/provisioning.

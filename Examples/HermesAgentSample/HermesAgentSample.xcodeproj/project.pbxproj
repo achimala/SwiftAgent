@@ -9,16 +9,16 @@
 /* Begin PBXBuildFile section */
 		05EE9C03291E2C7CA4A3DC84 /* HermesAgentWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2773FD3F8CF26CAC6A4481 /* HermesAgentWorker.swift */; };
 		083D9314B1791FB65A17FE0A /* commandDictionary.plist in Resources */ = {isa = PBXBuildFile; fileRef = 690BF81CD93B6324A828D0ED /* commandDictionary.plist */; };
-		5D456FDAA04576FFE60CE40F /* HermesWorkerExtensionPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B656684359669A192B1BF0A /* HermesWorkerExtensionPoint.swift */; };
 		8302E120C5B61A82B59ECA62 /* SmokeRunners.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F99698D58C43E858FE625D /* SmokeRunners.swift */; };
-		88B1F5EB1951FF117B007686 /* AgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2D3754D554308A3A0A091CD8 /* AgentKit */; };
+		88B1F5EB1951FF117B007686 /* SwiftAgent in Frameworks */ = {isa = PBXBuildFile; productRef = 46FFF107DD7947F3ABAD567E /* SwiftAgent */; };
 		8F1AF8BA06834212AA4E8550 /* ChatRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD1741E7F1FB023E9540478 /* ChatRow.swift */; };
 		9B2E3EF31816D6F66C2BD1D9 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7A75ED586E43ECC7F93E0D /* SettingsViews.swift */; };
-		A480F99CD172815254D90351 /* AgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1A349145F95AC966278355F8 /* AgentKit */; };
+		9DE14FBBDB405E9877341A3C /* SwiftAgentWorkerExtensionPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE8E83B18B7C10808B06C943 /* SwiftAgentWorkerExtensionPoint.swift */; };
+		A480F99CD172815254D90351 /* SwiftAgent in Frameworks */ = {isa = PBXBuildFile; productRef = ACFF64471457836AE70FDEDF /* SwiftAgent */; };
 		B85D7B0E2450F1BDF3FA8EC8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */; };
-		BC88D1845DDC34B97814FA44 /* AgentKitFoundationModels in Frameworks */ = {isa = PBXBuildFile; productRef = 4096DC84E163B705949CE99D /* AgentKitFoundationModels */; };
-		BEF66DF1BF0EAD3C8236C276 /* AgentKitMLX in Frameworks */ = {isa = PBXBuildFile; productRef = C295105FE19060BFA5497ED2 /* AgentKitMLX */; };
-		D047C05ECFAE309178FA1D84 /* AgentKitMLX in Frameworks */ = {isa = PBXBuildFile; productRef = 8FB8845A7B69841E3BFE96A6 /* AgentKitMLX */; };
+		BC88D1845DDC34B97814FA44 /* SwiftAgentFoundationModels in Frameworks */ = {isa = PBXBuildFile; productRef = 223C339363595BB610E10206 /* SwiftAgentFoundationModels */; };
+		BEF66DF1BF0EAD3C8236C276 /* SwiftAgentMLX in Frameworks */ = {isa = PBXBuildFile; productRef = A210C59442F5E3B1E30A1170 /* SwiftAgentMLX */; };
+		D047C05ECFAE309178FA1D84 /* SwiftAgentMLX in Frameworks */ = {isa = PBXBuildFile; productRef = 760EDAF4E2F667F96827B472 /* SwiftAgentMLX */; };
 		D88E71BB84E288D64941B032 /* HermesAgentWorker.appex in Embed ExtensionKit Extensions */ = {isa = PBXBuildFile; fileRef = D1EE402D48618F7BA41DB297 /* HermesAgentWorker.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E0877EEBB28FA5FFB23EC500 /* HermesAgentSampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */; };
 		F20B8799851C2847CA547067 /* ChatTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A51C55FA2A36CA6BDFF0E050 /* ChatTypes.swift */; };
@@ -50,21 +50,21 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		00DC5192B4858352258C4AF9 /* AgentKitMLX */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentKitMLX; path = ../../Packages/AgentKitMLX; sourceTree = SOURCE_ROOT; };
+		06FC5C2CF7AE814896AFC3C9 /* SwiftAgentFoundationModels */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftAgentFoundationModels; path = ../../Packages/SwiftAgentFoundationModels; sourceTree = SOURCE_ROOT; };
 		19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		2EF10E8A41CCBA6B50C0D9D1 /* AgentKitFoundationModels */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentKitFoundationModels; path = ../../Packages/AgentKitFoundationModels; sourceTree = SOURCE_ROOT; };
-		3113797EFC3A21F2B1AAAF05 /* AgentKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentKit; path = ../..; sourceTree = SOURCE_ROOT; };
+		3113797EFC3A21F2B1AAAF05 /* SwiftAgent */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftAgent; path = ../..; sourceTree = SOURCE_ROOT; };
+		3BF566C37B25958616403070 /* SwiftAgentMLX */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftAgentMLX; path = ../../Packages/SwiftAgentMLX; sourceTree = SOURCE_ROOT; };
 		50E09752BE18289D4EBC117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		544419CD6953902644C5D8B6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		690BF81CD93B6324A828D0ED /* commandDictionary.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = commandDictionary.plist; sourceTree = "<group>"; };
 		6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesAgentSampleApp.swift; sourceTree = "<group>"; };
-		8B656684359669A192B1BF0A /* HermesWorkerExtensionPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesWorkerExtensionPoint.swift; sourceTree = "<group>"; };
 		93A8FEFCE0E20CC1277EAC99 /* HermesAgentSample.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HermesAgentSample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9516D4CCEC3DC8169A9A8987 /* ChatTranscriptFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTranscriptFormatter.swift; sourceTree = "<group>"; };
 		A51C55FA2A36CA6BDFF0E050 /* ChatTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTypes.swift; sourceTree = "<group>"; };
 		A5F99698D58C43E858FE625D /* SmokeRunners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeRunners.swift; sourceTree = "<group>"; };
 		A939B6105E6E149E2DC7B946 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		AC2773FD3F8CF26CAC6A4481 /* HermesAgentWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesAgentWorker.swift; sourceTree = "<group>"; };
+		AE8E83B18B7C10808B06C943 /* SwiftAgentWorkerExtensionPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftAgentWorkerExtensionPoint.swift; sourceTree = "<group>"; };
 		D1EE402D48618F7BA41DB297 /* HermesAgentWorker.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.extensionkit-extension"; includeInIndex = 0; path = HermesAgentWorker.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA7A75ED586E43ECC7F93E0D /* SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViews.swift; sourceTree = "<group>"; };
 		DAD1741E7F1FB023E9540478 /* ChatRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRow.swift; sourceTree = "<group>"; };
@@ -75,9 +75,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				88B1F5EB1951FF117B007686 /* AgentKit in Frameworks */,
-				BEF66DF1BF0EAD3C8236C276 /* AgentKitMLX in Frameworks */,
-				BC88D1845DDC34B97814FA44 /* AgentKitFoundationModels in Frameworks */,
+				88B1F5EB1951FF117B007686 /* SwiftAgent in Frameworks */,
+				BEF66DF1BF0EAD3C8236C276 /* SwiftAgentMLX in Frameworks */,
+				BC88D1845DDC34B97814FA44 /* SwiftAgentFoundationModels in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -85,8 +85,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A480F99CD172815254D90351 /* AgentKit in Frameworks */,
-				D047C05ECFAE309178FA1D84 /* AgentKitMLX in Frameworks */,
+				A480F99CD172815254D90351 /* SwiftAgent in Frameworks */,
+				D047C05ECFAE309178FA1D84 /* SwiftAgentMLX in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -129,10 +129,10 @@
 				690BF81CD93B6324A828D0ED /* commandDictionary.plist */,
 				19ED5E4EF7A00C1A1AF29BB3 /* ContentView.swift */,
 				6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */,
-				8B656684359669A192B1BF0A /* HermesWorkerExtensionPoint.swift */,
 				544419CD6953902644C5D8B6 /* Info.plist */,
 				DA7A75ED586E43ECC7F93E0D /* SettingsViews.swift */,
 				A5F99698D58C43E858FE625D /* SmokeRunners.swift */,
+				AE8E83B18B7C10808B06C943 /* SwiftAgentWorkerExtensionPoint.swift */,
 			);
 			path = HermesAgentSample;
 			sourceTree = "<group>";
@@ -151,9 +151,9 @@
 		B07D4CA284835EFEDC76766A /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				3113797EFC3A21F2B1AAAF05 /* AgentKit */,
-				2EF10E8A41CCBA6B50C0D9D1 /* AgentKitFoundationModels */,
-				00DC5192B4858352258C4AF9 /* AgentKitMLX */,
+				3113797EFC3A21F2B1AAAF05 /* SwiftAgent */,
+				06FC5C2CF7AE814896AFC3C9 /* SwiftAgentFoundationModels */,
+				3BF566C37B25958616403070 /* SwiftAgentMLX */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -175,8 +175,8 @@
 			);
 			name = HermesAgentWorker;
 			packageProductDependencies = (
-				1A349145F95AC966278355F8 /* AgentKit */,
-				8FB8845A7B69841E3BFE96A6 /* AgentKitMLX */,
+				ACFF64471457836AE70FDEDF /* SwiftAgent */,
+				760EDAF4E2F667F96827B472 /* SwiftAgentMLX */,
 			);
 			productName = HermesAgentWorker;
 			productReference = D1EE402D48618F7BA41DB297 /* HermesAgentWorker.appex */;
@@ -199,9 +199,9 @@
 			);
 			name = HermesAgentSample;
 			packageProductDependencies = (
-				2D3754D554308A3A0A091CD8 /* AgentKit */,
-				C295105FE19060BFA5497ED2 /* AgentKitMLX */,
-				4096DC84E163B705949CE99D /* AgentKitFoundationModels */,
+				46FFF107DD7947F3ABAD567E /* SwiftAgent */,
+				A210C59442F5E3B1E30A1170 /* SwiftAgentMLX */,
+				223C339363595BB610E10206 /* SwiftAgentFoundationModels */,
 			);
 			productName = HermesAgentSample;
 			productReference = 93A8FEFCE0E20CC1277EAC99 /* HermesAgentSample.app */;
@@ -217,11 +217,11 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					11A98C86648E7B842E5331FE = {
-						DevelopmentTeam = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
+						DevelopmentTeam = "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)";
 						ProvisioningStyle = Automatic;
 					};
 					15B2BA45B3025A083C7E515F = {
-						DevelopmentTeam = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
+						DevelopmentTeam = "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -237,8 +237,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				280DA97F67D82E1DEBF4515F /* XCLocalSwiftPackageReference "../.." */,
-				EC761248AFCCBBCEBAAB257B /* XCLocalSwiftPackageReference "../../Packages/AgentKitFoundationModels" */,
-				3E3D9EC1F7316679FF358F2E /* XCLocalSwiftPackageReference "../../Packages/AgentKitMLX" */,
+				94158294740F9EC9D6DBD40A /* XCLocalSwiftPackageReference "../../Packages/SwiftAgentFoundationModels" */,
+				E6887F882F90739BB3FF7E23 /* XCLocalSwiftPackageReference "../../Packages/SwiftAgentMLX" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 03A51773980194C29C553DC7 /* Products */;
@@ -280,7 +280,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\n\"$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh\"\n";
+			shellScript = "set -euo pipefail\n\"$PROJECT_DIR/../../Scripts/swiftagent-install-hermes.sh\"\n";
 		};
 		E49C65EDAE6F527258D490B8 /* Process Python libraries */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -299,7 +299,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\n\"$PROJECT_DIR/../../Scripts/agentkit-install-hermes.sh\"\n";
+			shellScript = "set -euo pipefail\n\"$PROJECT_DIR/../../Scripts/swiftagent-install-hermes.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -313,9 +313,9 @@
 				F20B8799851C2847CA547067 /* ChatTypes.swift in Sources */,
 				B85D7B0E2450F1BDF3FA8EC8 /* ContentView.swift in Sources */,
 				E0877EEBB28FA5FFB23EC500 /* HermesAgentSampleApp.swift in Sources */,
-				5D456FDAA04576FFE60CE40F /* HermesWorkerExtensionPoint.swift in Sources */,
 				9B2E3EF31816D6F66C2BD1D9 /* SettingsViews.swift in Sources */,
 				8302E120C5B61A82B59ECA62 /* SmokeRunners.swift in Sources */,
+				9DE14FBBDB405E9877341A3C /* SwiftAgentWorkerExtensionPoint.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -374,7 +374,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
+				DEVELOPMENT_TEAM = "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -439,7 +439,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
+				DEVELOPMENT_TEAM = "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -465,7 +465,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = A939B6105E6E149E2DC7B946 /* Signing.xcconfig */;
 			buildSettings = {
-				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
+				DEVELOPMENT_TEAM = "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = HermesAgentWorker/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -473,7 +473,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample.HermesAgentWorker";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SWIFTAGENT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample.HermesAgentWorker";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -485,7 +485,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
+				DEVELOPMENT_TEAM = "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				EX_ENABLE_EXTENSION_POINT_GENERATION = YES;
@@ -494,7 +494,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SWIFTAGENT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -504,7 +504,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = A939B6105E6E149E2DC7B946 /* Signing.xcconfig */;
 			buildSettings = {
-				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
+				DEVELOPMENT_TEAM = "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = HermesAgentWorker/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -512,7 +512,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample.HermesAgentWorker";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SWIFTAGENT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample.HermesAgentWorker";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -524,7 +524,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = "$(AGENTKIT_SAMPLE_DEVELOPMENT_TEAM)";
+				DEVELOPMENT_TEAM = "$(SWIFTAGENT_SAMPLE_DEVELOPMENT_TEAM)";
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				EX_ENABLE_EXTENSION_POINT_GENERATION = YES;
@@ -533,7 +533,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENTKIT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SWIFTAGENT_SAMPLE_BUNDLE_ID_PREFIX).HermesAgentSample";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -576,36 +576,36 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../..;
 		};
-		3E3D9EC1F7316679FF358F2E /* XCLocalSwiftPackageReference "../../Packages/AgentKitMLX" */ = {
+		94158294740F9EC9D6DBD40A /* XCLocalSwiftPackageReference "../../Packages/SwiftAgentFoundationModels" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../Packages/AgentKitMLX;
+			relativePath = ../../Packages/SwiftAgentFoundationModels;
 		};
-		EC761248AFCCBBCEBAAB257B /* XCLocalSwiftPackageReference "../../Packages/AgentKitFoundationModels" */ = {
+		E6887F882F90739BB3FF7E23 /* XCLocalSwiftPackageReference "../../Packages/SwiftAgentMLX" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../Packages/AgentKitFoundationModels;
+			relativePath = ../../Packages/SwiftAgentMLX;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		1A349145F95AC966278355F8 /* AgentKit */ = {
+		223C339363595BB610E10206 /* SwiftAgentFoundationModels */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = AgentKit;
+			productName = SwiftAgentFoundationModels;
 		};
-		2D3754D554308A3A0A091CD8 /* AgentKit */ = {
+		46FFF107DD7947F3ABAD567E /* SwiftAgent */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = AgentKit;
+			productName = SwiftAgent;
 		};
-		4096DC84E163B705949CE99D /* AgentKitFoundationModels */ = {
+		760EDAF4E2F667F96827B472 /* SwiftAgentMLX */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = AgentKitFoundationModels;
+			productName = SwiftAgentMLX;
 		};
-		8FB8845A7B69841E3BFE96A6 /* AgentKitMLX */ = {
+		A210C59442F5E3B1E30A1170 /* SwiftAgentMLX */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = AgentKitMLX;
+			productName = SwiftAgentMLX;
 		};
-		C295105FE19060BFA5497ED2 /* AgentKitMLX */ = {
+		ACFF64471457836AE70FDEDF /* SwiftAgent */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = AgentKitMLX;
+			productName = SwiftAgent;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

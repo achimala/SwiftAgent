@@ -1,6 +1,6 @@
-import AgentKit
-import AgentKitFoundationModels
-import AgentKitMLX
+import SwiftAgent
+import SwiftAgentFoundationModels
+import SwiftAgentMLX
 import SwiftUI
 
 struct ContentView: View {
@@ -8,7 +8,7 @@ struct ContentView: View {
     @AppStorage("hermes.baseURL") private var baseURL = "https://api.openai.com/v1"
     @AppStorage("hermes.apiKey") private var apiKey = ""
     @AppStorage("hermes.model") private var model = "gpt-4.1-mini"
-    @AppStorage("hermes.mlxModel") private var mlxModel = AgentKitLocalMLXModels.qwen35_2BOptiQ4Bit
+    @AppStorage("hermes.mlxModel") private var mlxModel = SwiftAgentLocalMLXModels.qwen35_2BOptiQ4Bit
     @AppStorage("hermes.mlxMaxTokens") private var mlxMaxTokens = 128
     @AppStorage("hermes.mlxTemperature") private var mlxTemperature = 0.2
     @AppStorage("hermes.enableSoul") private var enableSoul = true
@@ -40,7 +40,7 @@ struct ContentView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 8)
             }
-            .navigationTitle("Hermes")
+            .navigationTitle("SwiftAgent")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -168,7 +168,7 @@ struct ContentView: View {
 
     private var composerField: some View {
         ZStack(alignment: .bottomTrailing) {
-            TextField("Message Hermes", text: $draft, axis: .vertical)
+            TextField("Message SwiftAgent", text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...5)
                 .submitLabel(.send)
@@ -292,7 +292,7 @@ struct ContentView: View {
             return try HermesAgent(
                 configuration: configuration,
                 sourceURL: HermesAgent.bundledSourceURL(),
-                backend: HermesExtensionProcessBackend(appExtensionPoint: .agentKitHermesWorker)
+                backend: HermesExtensionProcessBackend(appExtensionPoint: .swiftAgentWorker)
             )
         }
 
@@ -439,7 +439,7 @@ struct ContentView: View {
     }
 
     @MainActor
-    private func handle(event: AgentKitEvent, turnID: UUID) {
+    private func handle(event: SwiftAgentEvent, turnID: UUID) {
         switch event.kind {
         case "delta":
             endActiveReasoningChunk(for: turnID)
@@ -669,7 +669,7 @@ private struct EmptyChatView: View {
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(.secondary)
 
-                Text("What should Hermes do?")
+                Text("What should SwiftAgent do?")
                     .font(.title2.weight(.semibold))
 
                 Text("Start with a small workspace task.")

@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-AGENTKIT_PACKAGE_DIR="${AGENTKIT_PACKAGE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd -P)}"
-LOCK_FILE="${AGENTKIT_HERMES_LOCK_FILE:-$AGENTKIT_PACKAGE_DIR/Vendor/hermes-agent.lock}"
+SWIFTAGENT_PACKAGE_DIR="${SWIFTAGENT_PACKAGE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd -P)}"
+LOCK_FILE="${SWIFTAGENT_HERMES_LOCK_FILE:-$SWIFTAGENT_PACKAGE_DIR/Vendor/hermes-agent.lock}"
 
 if [ ! -f "$LOCK_FILE" ]; then
   echo "Hermes lock file was not found: $LOCK_FILE"
@@ -18,10 +18,10 @@ fi
 : "${HERMES_VERSION:?HERMES_VERSION is required in $LOCK_FILE}"
 : "${HERMES_COMMIT:?HERMES_COMMIT is required in $LOCK_FILE}"
 
-CACHE_DIR="${AGENTKIT_HERMES_CACHE_DIR:-$AGENTKIT_PACKAGE_DIR/Build/hermes-agent-src}"
-STAGE_DIR="${AGENTKIT_HERMES_STAGE_DIR:-$AGENTKIT_PACKAGE_DIR/Build/hermes-agent-stage}"
-PAYLOAD_DIR="${AGENTKIT_HERMES_PAYLOAD_DIR:-$AGENTKIT_PACKAGE_DIR/Payloads/Hermes/PythonApp}"
-UPDATE_LOCK_DIR="${AGENTKIT_HERMES_UPDATE_LOCK_DIR:-$AGENTKIT_PACKAGE_DIR/Build/hermes-agent-update.lock}"
+CACHE_DIR="${SWIFTAGENT_HERMES_CACHE_DIR:-$SWIFTAGENT_PACKAGE_DIR/Build/hermes-agent-src}"
+STAGE_DIR="${SWIFTAGENT_HERMES_STAGE_DIR:-$SWIFTAGENT_PACKAGE_DIR/Build/hermes-agent-stage}"
+PAYLOAD_DIR="${SWIFTAGENT_HERMES_PAYLOAD_DIR:-$SWIFTAGENT_PACKAGE_DIR/Payloads/Hermes/PythonApp}"
+UPDATE_LOCK_DIR="${SWIFTAGENT_HERMES_UPDATE_LOCK_DIR:-$SWIFTAGENT_PACKAGE_DIR/Build/hermes-agent-update.lock}"
 
 mkdir -p "$(dirname "$UPDATE_LOCK_DIR")"
 while ! mkdir "$UPDATE_LOCK_DIR" 2>/dev/null; do

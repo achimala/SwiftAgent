@@ -1,6 +1,6 @@
-import AgentKit
-import AgentKitFoundationModels
-import AgentKitMLX
+import SwiftAgent
+import SwiftAgentFoundationModels
+import SwiftAgentMLX
 import SwiftUI
 
 struct SettingsView: View {
@@ -30,7 +30,7 @@ struct SettingsView: View {
             Form {
                 Section("Provider") {
                     Picker("Provider", selection: $provider) {
-                        Text("Hermes").tag("hermes")
+                        Text("Hosted").tag("hermes")
                         Text("Offline MLX").tag("mlx")
                         Text("Apple").tag("foundation")
                     }
@@ -88,7 +88,7 @@ struct SettingsView: View {
                             FileEditorView(
                                 title: "SOUL.md",
                                 url: hermesHome.appendingPathComponent("SOUL.md"),
-                                placeholder: "Describe the agent identity and style Hermes should use."
+                                placeholder: "Describe the agent identity and style SwiftAgent should use."
                             )
                         } label: {
                             Label("Edit SOUL.md", systemImage: "person.text.rectangle")
@@ -124,7 +124,7 @@ struct SettingsView: View {
                             FileEditorView(
                                 title: "AGENTS.md",
                                 url: workspace.appendingPathComponent("AGENTS.md"),
-                                placeholder: "Workspace-specific instructions Hermes should follow in this iOS sandbox."
+                                placeholder: "Workspace-specific instructions SwiftAgent should follow in this iOS sandbox."
                             )
                         } label: {
                             Label("Edit AGENTS.md", systemImage: "doc.text")
@@ -172,7 +172,7 @@ struct SessionsView: View {
                         ContentUnavailableView(
                             "No Sessions",
                             systemImage: "bubble.left.and.bubble.right",
-                            description: Text("Chats will appear here after Hermes stores them.")
+                            description: Text("Chats will appear here after SwiftAgent stores them.")
                         )
                     } else {
                         ForEach(sessions) { session in
