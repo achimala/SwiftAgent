@@ -462,8 +462,8 @@ def _get_agent():
         emit_agent_step("swiftagent_local_provider_client_configured")
         agent_class = getattr(run_agent, "AIAgent")
         emit_agent_step("swiftagent_agent_class_ready")
+        patch_local_agent_runtime(run_agent, agent_class, _agent_config)
         if is_swiftagent_local_model_base_url(_agent_config["base_url"]):
-            patch_local_agent_runtime(run_agent, agent_class, _agent_config)
             emit_agent_step("swiftagent_local_runtime_patched")
         session_id = _load_or_create_session_id()
         emit_agent_step("swiftagent_session_id_ready")

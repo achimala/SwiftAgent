@@ -97,47 +97,6 @@ public final class SwiftAgentIOSShellEnvironment: SwiftAgentShellEnvironment, @u
         )
     }
 
-    public func smokeTest(cwd: URL? = nil) throws -> String {
-        let workspace = try cwd ?? Self.defaultWorkspace()
-            .appendingPathComponent("SmokeTest", isDirectory: true)
-        if cwd == nil {
-            try? FileManager.default.removeItem(at: workspace)
-        }
-        try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
-
-        let commands = [
-            "pwd",
-            "echo needle > a.txt",
-            "cat a.txt",
-            "grep needle a.txt | head -20 > out.txt",
-            "cat out.txt",
-            "find . -type f | xargs grep needle",
-            "rg needle . | head -20 > rg-out.txt",
-            "cat rg-out.txt",
-            "python3 -c 'print(\"python-c-ok\")'",
-            "echo 'print(\"python-file-ok\")' > probe.py",
-            "python3 probe.py",
-            "python3 -c 'raise SystemExit(7)'",
-            "python3 -c 'open(\"python-created.txt\", \"w\").write(\"created-by-python\\n\")'",
-            "cat python-created.txt",
-            "sh -c 'echo sh-c-ok'",
-        ]
-
-        var transcript = "WORKSPACE\n\(workspace.path)\n\n"
-        for command in commands {
-            let result = try run(command, cwd: workspace)
-            transcript += "$ \(command)\n"
-            if !result.output.isEmpty {
-                transcript += result.output
-                if !result.output.hasSuffix("\n") {
-                    transcript += "\n"
-                }
-            }
-            transcript += "[status \(result.status)]\n\n"
-        }
-        return transcript
-    }
-
     private func initialize(workspace: URL) throws {
         if initialized {
             return
@@ -196,8 +155,5 @@ public final class SwiftAgentIOSShellEnvironment: SwiftAgentShellEnvironment, @u
         throw SwiftAgentIOSShellError.missingResources
     }
 
-    public func smokeTest(cwd: URL? = nil) throws -> String {
-        throw SwiftAgentIOSShellError.missingResources
-    }
 #endif
 }

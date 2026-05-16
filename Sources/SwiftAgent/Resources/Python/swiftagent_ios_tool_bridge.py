@@ -199,7 +199,11 @@ def install_ios_tool_bridge(emit_stream):
 
         def _ios_host_path(path):
             raw = str(path or "")
-            if raw.startswith("~"):
+            if raw == "~":
+                raw = workspace
+            elif raw.startswith("~/"):
+                raw = os.path.join(workspace, raw[2:])
+            elif raw.startswith("~"):
                 raw = os.path.expanduser(raw)
             if not os.path.isabs(raw):
                 raw = os.path.join(workspace, raw)
@@ -208,7 +212,7 @@ def install_ios_tool_bridge(emit_stream):
             if os.path.commonpath([root, resolved]) != root:
                 raise ValueError(
                     f"Path is outside the SwiftAgent workspace: {path}. "
-                    "Use a workspace-relative path such as tool-smoke.txt."
+                    "Use a workspace-relative path such as notes.txt."
                 )
             return resolved
 
@@ -293,4 +297,3 @@ def install_ios_tool_bridge(emit_stream):
     except Exception:
         pass
     return True
-

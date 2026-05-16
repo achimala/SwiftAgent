@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		083D9314B1791FB65A17FE0A /* commandDictionary.plist in Resources */ = {isa = PBXBuildFile; fileRef = 690BF81CD93B6324A828D0ED /* commandDictionary.plist */; };
-		8302E120C5B61A82B59ECA62 /* SmokeRunners.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F99698D58C43E858FE625D /* SmokeRunners.swift */; };
 		88B1F5EB1951FF117B007686 /* SwiftAgent in Frameworks */ = {isa = PBXBuildFile; productRef = 46FFF107DD7947F3ABAD567E /* SwiftAgent */; };
 		8F1AF8BA06834212AA4E8550 /* ChatRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD1741E7F1FB023E9540478 /* ChatRow.swift */; };
 		9B2E3EF31816D6F66C2BD1D9 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7A75ED586E43ECC7F93E0D /* SettingsViews.swift */; };
@@ -31,7 +30,6 @@
 		93A8FEFCE0E20CC1277EAC99 /* HermesAgentSample.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HermesAgentSample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9516D4CCEC3DC8169A9A8987 /* ChatTranscriptFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTranscriptFormatter.swift; sourceTree = "<group>"; };
 		A51C55FA2A36CA6BDFF0E050 /* ChatTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTypes.swift; sourceTree = "<group>"; };
-		A5F99698D58C43E858FE625D /* SmokeRunners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeRunners.swift; sourceTree = "<group>"; };
 		A939B6105E6E149E2DC7B946 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		DA7A75ED586E43ECC7F93E0D /* SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViews.swift; sourceTree = "<group>"; };
 		DAD1741E7F1FB023E9540478 /* ChatRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRow.swift; sourceTree = "<group>"; };
@@ -79,7 +77,6 @@
 				6EE5F9287761763D09AF10C3 /* HermesAgentSampleApp.swift */,
 				544419CD6953902644C5D8B6 /* Info.plist */,
 				DA7A75ED586E43ECC7F93E0D /* SettingsViews.swift */,
-				A5F99698D58C43E858FE625D /* SmokeRunners.swift */,
 			);
 			path = HermesAgentSample;
 			sourceTree = "<group>";
@@ -213,7 +210,6 @@
 				B85D7B0E2450F1BDF3FA8EC8 /* ContentView.swift in Sources */,
 				E0877EEBB28FA5FFB23EC500 /* HermesAgentSampleApp.swift in Sources */,
 				9B2E3EF31816D6F66C2BD1D9 /* SettingsViews.swift in Sources */,
-				8302E120C5B61A82B59ECA62 /* SmokeRunners.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -6,6 +6,7 @@ import uuid
 _agent_config = {}
 _original_run_agent_openai = None
 _original_run_agent_openai_cache = None
+_original_agent_runtime_methods = None
 
 
 def is_swiftagent_local_model_base_url(base_url):
@@ -381,7 +382,10 @@ def patch_local_agent_runtime(run_agent, agent_class, agent_config):
     global _agent_config
     _agent_config = agent_config
     if not is_swiftagent_local_model_base_url(_agent_config["base_url"]):
+        _restore_agent_runtime(agent_class)
         return
+
+    _capture_agent_runtime(agent_class)
 
     def _rough_text_size(value):
         try:
@@ -409,3 +413,34 @@ def patch_local_agent_runtime(run_agent, agent_class, agent_config):
     agent_class._cleanup_dead_connections = lambda self: False
     agent_class._check_compression_model_feasibility = lambda self: None
 
+
+def _capture_agent_runtime(agent_class):
+    global _original_agent_runtime_methods
+    if _original_agent_runtime_methods is not None:
+        return
+    names = [
+        "_create_request_openai_client",
+        "_close_request_openai_client",
+        "_build_keepalive_http_client",
+        "_cleanup_dead_connections",
+        "_check_compression_model_feasibility",
+    ]
+    _original_agent_runtime_methods = {
+        name: getattr(agent_class, name, None)
+        for name in names
+    }
+
+
+def _restore_agent_runtime(agent_class):
+    global _original_agent_runtime_methods
+    if _original_agent_runtime_methods is None:
+        return
+    for name, value in _original_agent_runtime_methods.items():
+        if value is None:
+            try:
+                delattr(agent_class, name)
+            except AttributeError:
+                pass
+        else:
+            setattr(agent_class, name, value)
+    _original_agent_runtime_methods = None

@@ -141,7 +141,7 @@ Verified in simulator and generic iOS builds:
 - The iSH guest bind-mounts the SwiftAgent workspace at `/workspace`, so shell-created files are visible to Python/file tooling.
 - The bundled iSH rootfs includes `python3`, `rg`, `jq`, and `git` for a first useful agent shell POC.
 - A local MLX/Qwen 2B provider can be wired through the optional add-on package and the same model-provider bridge as an offline proof of concept.
-- Apple Foundation Models can be wired through the optional add-on package. On an iPhone 17 Pro Max, direct Hermes chat returned first text in about 5 seconds, and a basic file-tool smoke caused the model to request `write_file`, `read_file`, and `terminal` calls that Hermes executed.
+- Apple Foundation Models can be wired through the optional add-on package. On an iPhone 17 Pro Max, direct Hermes chat returned first text in about 5 seconds, and a basic file-tool run caused the model to request `write_file`, `read_file`, and `terminal` calls that Hermes executed.
 
 ## Known Boundaries
 

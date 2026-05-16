@@ -247,7 +247,17 @@ enum ChatTranscriptFormatter {
         if let success = object["success"], case .bool(false) = success {
             return true
         }
-        return object["error"] != nil
+        if let error = object["error"] {
+            switch error {
+            case .null:
+                return false
+            case .string(let message):
+                return !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            default:
+                return true
+            }
+        }
+        return false
     }
 
     private static func decodeJSONValue(_ text: String) -> JSONValue? {
